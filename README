@@ -1,0 +1,57 @@
+                           VMware::vSphere
+
+  WHAT IS IT?
+  -----------
+
+VMware::vSphere is a pure perl interface to VMware vSphere Web Services
+(management interface for VMware vCenter and VMware ESXi products).
+It is not a full-featured replacement for VMware vSphere Perl SDK but this
+module has following advantages:
+
+  * It's a pure perl module (VMware SDK has binaries and python (OMG!) in the
+    latest distributive).
+
+  * It has minumal dependencies on non-core modules. Actually it needs LWP,
+    IO::Socket::SSL, XML::Simple and XML::Writer modules only.
+
+  * High performance: it requests only what's actually needed.
+
+The distribution includes:
+
+  * VMware::vSphere - raw perl interface to VMware vSphere Web Services
+
+  * VMware::vSphere::Simple - extends VMware::vSphere with simplified methods
+
+  * vsphere - utility to call VMware::vSphere::Simple methods from CLI
+
+
+  INSTALLATION
+  ------------
+
+  perl Makefile.PL
+  make test
+  make install
+
+  SEE ALSO
+  --------
+
+  * Official VMware vSphere Web Services SDK Documentation
+    https://www.vmware.com/support/developer/vc-sdk/index.html
+
+  * man vsphere (available after installation)
+
+  * man VMware::vSphere (available after installation)
+
+  * man VMware::vSphere::Simple (available after installation)
+
+
+  AUTHOR
+  ------
+
+  Mikhail Telnov <Mikhail.Telnov@gmail.com>
+
+
+  LICENSING
+  ---------
+
+  Please see the file called LICENSE.

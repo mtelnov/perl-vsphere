@@ -1,0 +1,156 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Data::Dumper;
+use File::Basename qw{ basename };
+use VMware::vSphere;
+use VMware::vSphere::Simple;
+
+&show_usage() if not @ARGV;
+
+for (qw{ VSPHERE_HOST VSPHERE_USER VSPHERE_PASS }) {
+    if (not defined $ENV{$_}) {
+        print STDERR "Error: Required environment variable '$_' isn't defined\n";
+        exit 1;
+    }
+}
+
+my $v = VMware::vSphere::Simple->new(
+    host => $ENV{VSPHERE_HOST},
+    username => $ENV{VSPHERE_USER},
+    password => $ENV{VSPHERE_PASS},
+);
+
+my $method = shift @ARGV;
+
+if (not $v->can($method)) {
+    print STDERR "Error: Method '$method' not found.\n";
+    &show_usage();
+}
+
+my @args;
+for (@ARGV) {
+    if (/^\{.*\}$/ or /^\[.*\]$/) {
+        push @args, eval;
+    } else {
+        push @args, $_;
+    }
+}
+
+my $r = $v->$method(@args);
+if (not ref $r) {
+    print $r, "\n";
+    exit 0;
+}
+print Data::Dumper->Dump([$r], ['Return']) if defined $r;
+exit 0;
+
+sub list_methods {
+    my %methods;
+    no strict 'refs';
+    for my $m (qw{ VMware::vSphere:: VMware::vSphere::Simple:: }) {
+        for (keys %$m) {
+            next unless defined &{"${m}$_"};
+            next unless /^[a-z][a-z_]+/;
+            next if /^(carp|croak|confess|new)$/;
+
+            $methods{$_} = 1;
+        }
+    }
+    use strict 'refs';
+    return sort keys %methods;
+}
+
+sub show_usage {
+    print STDERR "vsphere - CLI for VMware::vSphere::Simple perl module\n",
+                 "VMware::vSphere version is ", $VMware::vSphere::VERSION,
+                 "\n\nUsage: ", basename($0),
+                 " <METHOD> [[PARAMETER1] [PARAMETER2]...]\n\n",
+                 "Available methods:\n";
+    print STDERR "$_\n" for &list_methods();
+    print STDERR "\nPlease see man or perldoc VMware::vSphere::Simple\n";
+    exit 64;
+}
+
+__END__
+
+=head1 NAME
+
+vsphere - command line interface for VMware::vSphere::Simple perl module
+
+=head1 SYNOPSIS
+
+    vsphere <METHOD> [[PARAMETER1] [PARAMETER2]...]
+
+    export VSPHERE_HOST=vc.example.com
+    export VSPHERE_USER=root
+    export VSPHERE_PASS=vmware
+
+    vsphere shutdown_vm "My VM1"
+    vsphere create_snapshot vm_name "My VM1" name "snapshot1"
+    vsphere linked_clone "My VM1" "My VM2"
+    vsphere poweron_vm "My VM2"
+
+=head1 DESCRIPTION
+
+This is a simple CLI utility to manage VMware vSphere services (vCenter or
+ESXi). The utility makes login to vSphere service using credentials from
+environment variables (VSPHERE_HOST, VSPHERE_USER, VSPHERE_PASS), performs the
+specified method and makes logout on exit. It isn't effective if you perform
+several methods in row. In this case use perl module L<VMware::vSphere::Simple>
+directly.
+
+Parameters are translating to perl data structures if it begins with C<[> and
+C<{> and ends with C<]> or C<}> characters respectively.
+
+=head1 ENVIRONMENT VARIABLES
+
+=over
+
+=item VSPHERE_HOST
+
+Hostname or IP address of the VMware vSphere Web Service (vCenter or ESXi).
+
+=item VSPHERE_USER
+
+Username for login to the VMware vSphere Web Service.
+
+=item VSPHERE_PASS
+
+Password for login to the VMware vSphere Web Service.
+
+=back
+
+=head1 SEE ALSO
+
+=over
+
+=item L<VMware::vSphere>
+
+Raw interface to VMware vSphere Web Services.
+
+=item L<VMware::vSphere::Simple>
+
+Simplifies common vSphere methods and makes it more perlish.
+
+=item L<https://www.vmware.com/support/developer/vc-sdk/index.html>
+
+Official VMware vSphere Web Services SDK Documentation.
+
+=back
+
+
+=head1 AUTHOR
+
+Mikhail Telnov E<lt>Mikhail.Telnov@gmail.comE<gt>
+
+=head1 COPYRIGHT
+
+This software is copyright (c) 2016 by Mikhail Telnov.
+
+This library is free software; you may redistribute and/or modify it
+under the same terms as Perl itself.
+
+=cut

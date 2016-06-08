@@ -350,11 +350,12 @@ sub login {
     $w->dataElement(userName => $self->{username});
     $w->dataElement(password => $self->{password});
     $w->end;
-    return $self->request(
+    $self->{UserSession} = $self->request(
         SessionManager => $self->{service}{sessionManager},
         Login          => $spec,
         1
     );
+    return $self->{UserSession};
 }
 
 sub debug {
@@ -369,11 +370,13 @@ sub debug {
 
 sub DESTROY {
     my $self = shift;
-    $self->request(
-        SessionManager => $self->{service}{sessionManager},
-        Logout         => undef,
-        2
-    );
+    if (defined $self->{UserSession}) {
+        $self->request(
+            SessionManager => $self->{service}{sessionManager},
+            Logout         => undef,
+            2
+        );
+    }
     return 1;
 }
 

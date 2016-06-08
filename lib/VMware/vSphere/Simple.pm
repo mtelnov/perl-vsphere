@@ -765,6 +765,20 @@ Disconnects virtual floppy drive.
 
 Creates a new virtual disk in the virtual machine.
 
+Required parameters:
+
+=over
+
+=item vm_name =E<gt> $vm_name
+
+Name of the target virtual machine.
+
+=item size =E<gt> $disk_size
+
+Size of the disk in KB.
+
+=back
+
 Options:
 
 =over

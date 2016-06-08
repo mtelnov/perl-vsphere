@@ -10,3 +10,4 @@ t/01-require.t
 t/02-basic.t
 t/03-vsphere.t
 t/04-simple.t
+t/05-vm_related.t

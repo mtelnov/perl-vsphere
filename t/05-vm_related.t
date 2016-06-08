@@ -1,7 +1,7 @@
 use strict;
 use Test::More;
 
-my @missed_envvar = grep { not defined }
+my @missed_envvar = grep { not defined $ENV{$_} }
                     qw{VSPHERE_HOST VSPHERE_USER VSPHERE_PASS VSPHERE_TEST_VM};
 
 if (@missed_envvar) {

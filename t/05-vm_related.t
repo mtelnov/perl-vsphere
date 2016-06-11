@@ -8,7 +8,7 @@ if (@missed_envvar) {
     plan skip_all => 'Set environment variables '.join(', ', @missed_envvar).
                      ' to run this test suite.';
 } else {
-    plan tests => 12;
+    plan tests => 14;
 }
 
 my $vm_name = $ENV{VSPHERE_TEST_VM};
@@ -74,7 +74,8 @@ if ($powerstate eq 'poweredOn') {
     &wait_for_powerstate('poweredOff');
 }
 
-ok($v->create_snapshot(vm_name => $vm_name, name => 'test'), 'create_snapshot');
+my $snapshot = $v->create_snapshot($vm_name, name => 'test');
+ok($snapshot, 'create_snapshot');
 ok($v->poweron_vm($vm_name), 'poweron_vm');
 my $tools_is_running = &wait_for_vmtools;
 
@@ -95,12 +96,14 @@ ok($v->mount_tools_installer($vm_name), 'mount_tools_installer');
 ok($v->poweroff_vm($vm_name), 'poweroff_vm');
 &wait_for_powerstate('poweredOff');
 ok(
-    $v->reconfigure_vm(
-        vm_name           => $vm_name,
+    $v->reconfigure_vm($vm_name,
         numCPUs           => 2,
         numCoresPerSocket => 2,
-        memoryMB          => 142,
+        memoryMB          => 192,
     ),
     'reconfigure_vm'
 );
-ok($v->create_disk(vm_name => $vm_name, size => 42 * 1024), 'create_disk');
+ok($v->create_disk($vm_name, size => 42 * 1024), 'create_disk');
+
+ok($v->revert_to_current_snapshot($vm_name), 'revert_to_current_snapshot');
+ok($v->remove_snapshot($snapshot), 'remove_snapshot');

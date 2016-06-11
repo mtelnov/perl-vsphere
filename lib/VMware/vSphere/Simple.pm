@@ -25,6 +25,7 @@ sub get_moid {
 
 sub get_vm_path {
     my ($self, $vm_name) = @_;
+    croak "VM name isn't defined" if not defined $vm_name;
 
     return $self->get_property('config.files.vmPathName',
         where => { name => $vm_name },
@@ -33,6 +34,7 @@ sub get_vm_path {
 
 sub get_vm_powerstate {
     my ($self, $vm_name) = @_;
+    croak "VM name isn't defined" if not defined $vm_name;
 
     return $self->get_property('runtime.powerState',
         where => { name => $vm_name },
@@ -41,6 +43,7 @@ sub get_vm_powerstate {
 
 sub tools_is_running {
     my ($self, $vm_name) = @_;
+    croak "VM name isn't defined" if not defined $vm_name;
 
     return $self->get_property('guest.toolsRunningStatus',
         where => { name => $vm_name },
@@ -49,6 +52,7 @@ sub tools_is_running {
 
 sub get_datastore_url {
     my ($self, $name) = @_;
+    croak "Datastore name isn't defined" if not defined $name;
 
     return $self->get_property('info.url',
         of    => 'Datastore',
@@ -58,24 +62,29 @@ sub get_datastore_url {
 
 sub poweron_vm {
     my ($self, $vm_name) = @_;
+    croak "VM name isn't defined" if not defined $vm_name;
     print STDERR "Power on VM '$vm_name'\n" if $self->debug;
-    return $self->run_task(
+    $self->run_task(
         VirtualMachine => $self->get_moid($vm_name),
         'PowerOnVM_Task'
     );
+    return 1;
 }
 
 sub poweroff_vm {
     my ($self, $vm_name) = @_;
+    croak "VM name isn't defined" if not defined $vm_name;
     print STDERR "Power off VM '$vm_name'\n" if $self->debug;
-    return $self->run_task(
+    $self->run_task(
         VirtualMachine => $self->get_moid($vm_name),
         'PowerOffVM_Task'
     );
+    return 1;
 }
 
 sub shutdown_vm {
     my ($self, $vm_name) = @_;
+    croak "VM name isn't defined" if not defined $vm_name;
     print STDERR "Shutdown VM '$vm_name'\n" if $self->debug;
     $self->request(
         VirtualMachine => $self->get_moid($vm_name),
@@ -86,6 +95,7 @@ sub shutdown_vm {
 
 sub reboot_vm {
     my ($self, $vm_name) = @_;
+    croak "VM name isn't defined" if not defined $vm_name;
     print STDERR "Reboot VM '$vm_name'\n" if $self->debug;
     $self->request(
         VirtualMachine => $self->get_moid($vm_name),
@@ -96,19 +106,20 @@ sub reboot_vm {
 
 sub create_snapshot {
     my $self = shift;
+    my $vm_name = shift;
     my %args = (
-        vm_name     => undef,
         name        => undef,
         description => '',
         memory      => 0,
         quiesce     => 0,
         @_
     );
-    for (qw{ vm_name name }) {
+    croak "VM name isn't defined" if not defined $vm_name;
+    for (qw{ name }) {
         croak "Required parameter '$_' isn't defined" if not defined $args{$_};
     }
 
-    print STDERR "Create the snapshot '$args{name}' for VM '$args{vm_name}'\n"
+    print STDERR "Create the snapshot '$args{name}' for VM '$vm_name'\n"
         if $self->debug;
 
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
@@ -116,15 +127,54 @@ sub create_snapshot {
         for qw{name description memory quiesce};
     $w->end;
     return $self->run_task(
-        VirtualMachine => $self->get_moid($args{vm_name}),
+        VirtualMachine => $self->get_moid($vm_name),
         CreateSnapshot_Task => $spec
     );
 }
 
+sub revert_to_current_snapshot {
+    my ($self, $vm_name) = @_;
+    croak "VM name isn't defined" if not defined $vm_name;
+
+    print STDERR "Revert VM '$vm_name' to the current snapshot\n"
+        if $self->debug;
+
+    $self->run_task(
+        VirtualMachine => $self->get_moid($vm_name),
+        'RevertToCurrentSnapshot_Task'
+    );
+    return 1;
+}
+
+sub remove_snapshot {
+    my $self = shift;
+    my $snapshot_moid = shift;
+    my %args = (
+        removeChildren => 1,
+        consolidate => 1,
+        @_
+    );
+    croak "Snapshot ID isn't defined" if not defined $snapshot_moid;
+
+    print STDERR "Remove snapshot with ID = $snapshot_moid\n"
+        if $self->debug;
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement($_ => $args{$_} ? 'true': 'false')
+        for qw{removeChildren consolidate};
+    $w->end;
+    $self->run_task(
+        VirtualMachineSnapshot => $snapshot_moid,
+        RemoveSnapshot_Task => $spec
+    );
+    return 1;
+}
+
 sub reconfigure_vm {
     my $self = shift;
+    my $vm_name = shift;
     my %args = @_;
-    my $vm_name = delete $args{vm_name} or croak "vm_name isn't defined";
+    croak "VM name isn't defined" if not defined $vm_name;
 
     print STDERR "Reconfigure VM '$vm_name'\n" if $self->debug;
 
@@ -140,10 +190,11 @@ sub reconfigure_vm {
     }
     $w->endTag('spec');
     $w->end;
-    return $self->run_task(
+    $self->run_task(
         VirtualMachine => $self->get_moid($vm_name),
         ReconfigVM_Task => $spec
     );
+    return 1;
 }
 
 sub connect_cdrom {
@@ -177,10 +228,11 @@ sub connect_cdrom {
     $w->endTag('deviceChange');
     $w->endTag('spec');
     $w->end;
-    return $self->run_task(
+    $self->run_task(
         VirtualMachine => $self->get_moid($vm_name),
         ReconfigVM_Task => $spec
     );
+    return 1;
 }
 
 sub disconnect_cdrom {
@@ -215,10 +267,11 @@ sub disconnect_cdrom {
     $w->endTag('deviceChange');
     $w->endTag('spec');
     $w->end;
-    return $self->run_task(
+    $self->run_task(
         VirtualMachine => $self->get_moid($vm_name),
         ReconfigVM_Task => $spec
     );
+    return 1;
 }
 
 sub connect_floppy {
@@ -253,10 +306,11 @@ sub connect_floppy {
     $w->endTag('deviceChange');
     $w->endTag('spec');
     $w->end;
-    return $self->run_task(
+    $self->run_task(
         VirtualMachine => $self->get_moid($vm_name),
         ReconfigVM_Task => $spec
     );
+    return 1;
 }
 
 sub disconnect_floppy {
@@ -293,27 +347,29 @@ sub disconnect_floppy {
     $w->endTag('deviceChange');
     $w->endTag('spec');
     $w->end;
-    return $self->run_task(
+    $self->run_task(
         VirtualMachine => $self->get_moid($vm_name),
         ReconfigVM_Task => $spec
     );
+    return 1;
 }
 
 sub create_disk {
     my $self = shift;
+    my $vm_name = shift;
     my %args = (
-        vm_name    => undef, # name of the VM
         size       => undef, # in KB
         thin       => 1,     # enable Thin Provisioning
         controller => 1000,  # controller ID
         unit       => 1,     # unit number
         @_,
     );
-    for (qw{ vm_name size }) {
+    croak "VM name isn't defined" if not defined $vm_name;
+    for (qw{ size }) {
         croak "Required parameter '$_' isn't defined" if not defined $args{$_};
     }
 
-    print STDERR "Create virtual disk in VM '$args{vm_name}' with size ".
+    print STDERR "Create virtual disk in VM '$vm_name' with size ".
                  "$args{size}KB\n" if $self->debug;
 
     my $w = XML::Writer->new(OUTPUT => \my $spec);
@@ -345,10 +401,11 @@ sub create_disk {
     $w->endTag('deviceChange');
     $w->endTag('spec');
     $w->end;
-    return $self->run_task(
-        VirtualMachine => $self->get_moid($args{vm_name}),
+    $self->run_task(
+        VirtualMachine => $self->get_moid($vm_name),
         ReconfigVM_Task => $spec
     );
+    return 1;
 }
 
 sub remove_disk {
@@ -400,10 +457,11 @@ sub remove_disk {
     $w->endTag('deviceChange');
     $w->endTag('spec');
     $w->end;
-    return $self->run_task(
+    $self->run_task(
         VirtualMachine => $self->get_moid($vm_name),
         ReconfigVM_Task => $spec
     );
+    return 1;
 }
 
 sub add_nas_storage {
@@ -499,20 +557,21 @@ sub find_files {
 
 sub register_vm {
     my $self = shift;
+    my $vm_name = shift;
     my %args = (
         datacenter => undef, # Datacenter name
         cluster => undef, # Cluster name
         host    => undef, # Host name
         path    => undef, # Path to the VM config file
-        name    => undef, # VM name
         as_template => 0, # Add as template
         @_,
     );
-    for (qw{ datacenter cluster host path name }) {
+    croak "VM name isn't defined" if not defined $vm_name;
+    for (qw{ datacenter cluster host path }) {
         croak "Required parameter '$_' isn't defined" if not defined $args{$_};
     }
 
-    print STDERR "Register $args{path} as $args{name} at $args{host}\n"
+    print STDERR "Register $args{path} as $vm_name at $args{host}\n"
         if $self->debug;
 
     my $datacenter = $self->get_property('vmFolder',
@@ -530,7 +589,7 @@ sub register_vm {
 
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
     $w->dataElement(path => $args{path});
-    $w->dataElement(name => $args{name});
+    $w->dataElement(name => $vm_name);
     $w->dataElement(asTemplate => $args{as_template} ? 'true' : 'false');
     $w->dataElement(pool => $cluster, type => 'ResourcePool');
     $w->dataElement(host => $host, type => 'HostSystem');
@@ -678,7 +737,7 @@ Issues a command to the guest operating system asking it to perform a reboot.
 Returns immediately and does not wait for the guest operating system to
 complete the operation.
 
-=item $v-E<gt>create_snapshot(vm_name =E<gt> $vm_name, name =E<gt> $snapshot_name, %parameters)
+=item $v-E<gt>create_snapshot($vm_name, name =E<gt> $snapshot_name, %options)
 
 Creates a new snapshot of the virtual machine. As a side effect, this updates
 the current snapshot.
@@ -687,11 +746,11 @@ Required parameters:
 
 =over
 
-=item vm_name
+=item $vm_name
 
 Name of the target virtual machine.
 
-=item name
+=item name =E<gt> $snapshot_name
 
 Name for the new snapshot.
 
@@ -701,11 +760,11 @@ Optional parameters:
 
 =over
 
-=item description
+=item description =E<gt> $description
 
 Description for this snapshot.
 
-=item memory
+=item memory =E<gt> $boolean
 
 If TRUE, a dump of the internal state of the virtual machine (basically a memory
 dump) is included in the snapshot. Memory snapshots consume time and resources,
@@ -713,7 +772,7 @@ and thus take longer to create. When set to FALSE, the power state of the
 snapshot is set to powered off.
 
 
-=item quiesce
+=item quiesce =E<gt> $boolean
 
 If TRUE and the virtual machine is powered on when the snapshot is taken, VMware
 Tools is used to quiesce the file system in the virtual machine. This assures
@@ -723,7 +782,31 @@ quiesce flag is ignored.
 
 =back
 
-=item $v-E<gt>reconfigure_vm(vm_name =E<gt> $vm_name, %options)
+=item $v-E<gt>revert_to_current_snapshot($vm_name)
+
+Reverts the virtual machine to the current snapshot. If no snapshot exists, then
+the operation does nothing, and the virtual machine state remains unchanged.
+
+=item $v-E<gt>remove_snapshot($snapshot_moid, %opts)
+
+Removes this snapshot and deletes any associated storage.
+
+Following options are available:
+
+=over
+
+=item removeChildren =E<gt> $boolean
+
+Flag to specify removal of the entire snapshot subtree (enabled by default).
+
+=item consolidate =E<gt> $boolean
+
+If set to true, the virtual disk associated with this snapshot will be merged
+with other disk if possible. Defaults to true.
+
+=back
+
+=item $v-E<gt>reconfigure_vm($vm_name, %options)
 
 Modifies virtual hardware or configuration of the virtual machine.
 
@@ -761,7 +844,7 @@ Connects floppy image to the VM.
 
 Disconnects virtual floppy drive.
 
-=item $v-E<gt>create_disk(vm_name =E<gt> $vm_name, size =E<gt> $disk_size, %options)
+=item $v-E<gt>create_disk($vm_name, size =E<gt> $disk_size, %options)
 
 Creates a new virtual disk in the virtual machine.
 
@@ -769,7 +852,7 @@ Required parameters:
 
 =over
 
-=item vm_name =E<gt> $vm_name
+=item $vm_name
 
 Name of the target virtual machine.
 
@@ -856,7 +939,7 @@ type (disabled by default).
 
 =back
 
-=item $v-E<gt>register_vm(%parameters)
+=item $v-E<gt>register_vm($vm_name, %parameters)
 
 Registers a virtual machine in the inventory.
 
@@ -879,10 +962,6 @@ Name of the target host system.
 =item path =E<gt> $path
 
 Path to the config file of virtual machine.
-
-=item name =E<gt> $name
-
-Name for the new virtual machine.
 
 =back
 

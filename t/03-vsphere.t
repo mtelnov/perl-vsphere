@@ -1,21 +1,22 @@
 use strict;
 use Test::More;
 
-if ($ENV{VSPHERE_HOST} and $ENV{VSPHERE_USER} and $ENV{VSPHERE_PASS}) {
-    plan tests => 14;
+my @missed_envvar = grep { not defined $ENV{$_} }
+                    qw{VSPHERE_HOST VSPHERE_USER VSPHERE_PASS};
+
+if (@missed_envvar) {
+    plan skip_all => 'Set environment variables '.join(', ', @missed_envvar).
+                     ' to run this test suite.';
 } else {
-    plan skip_all => 'Set environment variables VSPHERE_HOST, VSPHERE_USER, '.
-                     'VSPHERE_PASS to run this test suite.';
+    plan tests => 14;
 }
 
 use VMware::vSphere;
 
-my $host = $ENV{VSPHERE_HOST};
-my $user = $ENV{VSPHERE_USER};
-my $pass = $ENV{VSPHERE_PASS};
-
 my $v = VMware::vSphere->new(
-    host => $host, username => $user, password => $pass,
+    host     => $ENV{VSPHERE_HOST},
+    username => $ENV{VSPHERE_USER},
+    password => $ENV{VSPHERE_PASS},
 );
 
 is($v->debug, 0);

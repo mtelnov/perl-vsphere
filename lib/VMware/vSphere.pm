@@ -370,7 +370,7 @@ sub debug {
 
 sub DESTROY {
     my $self = shift;
-    if (defined $self->{UserSession}) {
+    if (defined $self and defined $self->{UserSession}) {
         $self->request(
             SessionManager => $self->{service}{sessionManager},
             Logout         => undef,

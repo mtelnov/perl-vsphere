@@ -1,0 +1,6 @@
+_vsphere_completion()
+{
+    COMPREPLY=( $( compgen -W "`vsphere comp $COMP_CWORD ${COMP_WORDS[@]}`" ${COMP_WORDS[COMP_CWORD]} ) )
+}
+
+complete -F _vsphere_completion vsphere

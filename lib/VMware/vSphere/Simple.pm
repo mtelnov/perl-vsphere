@@ -10,6 +10,14 @@ use VMware::vSphere;
 our $VERSION = '1.00';
 our @ISA = qw{ VMware::vSphere };
 
+sub list {
+    my ($self, $type) = @_;
+    $type ||= 'VirtualMachine';
+    my $p = $self->get_properties(of => $type, properties => ['name']);
+    my @list = sort map { $p->{$_}{name} } keys %$p;
+    return @list;
+}
+
 sub get_moid {
     my ($self, $name, $type) = @_;
     croak "Name of the managed object isn't defined" if not defined $name;
@@ -668,7 +676,7 @@ VMware::vSphere::Simple - simple interface for VMware vSphere Web Services
 
 =head1 SYNOPSIS
 
-    my $v = VMware::VSphere::Simple->new(
+    my $v = VMware::vSphere::Simple->new(
         host => $vcenter_host,
         username => $vcenter_username,
         password => $vcenter_password,
@@ -681,14 +689,21 @@ VMware::vSphere::Simple - simple interface for VMware vSphere Web Services
 This module provides an easy interface to VMware vSphere Web Services
 (management interface for VMware vCenter and VMware ESXi products).
 
-L<VMware::VSphere::Simple> extands L<VMware::VSphere>, so look its documentation
+L<VMware::vSphere::Simple> extands L<VMware::vSphere>, so look its documentation
 if you didn't read this yet.
 
 =head1 METHODS
 
-This module inherits the constructor and methods from L<VMware::VSphere>.
+This module inherits the constructor and methods from L<VMware::vSphere>.
 
 =over
+
+=item @mo_names = $v-E<gt>list()
+
+=item @mo_names = $v-E<gt>list($type)
+
+Returns a list with names of Managed Objects with specified C<$type>
+('VirtualMachine' by default).
 
 =item $moid = $v-E<gt>get_moid($name)
 

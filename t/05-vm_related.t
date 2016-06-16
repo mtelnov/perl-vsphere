@@ -8,7 +8,7 @@ if (@missed_envvar) {
     plan skip_all => 'Set environment variables '.join(', ', @missed_envvar).
                      ' to run this test suite.';
 } else {
-    plan tests => 14;
+    plan tests => 15;
 }
 
 my $vm_name = $ENV{VSPHERE_TEST_VM};
@@ -21,6 +21,7 @@ my $v = VMware::vSphere::Simple->new(
     password => $ENV{VSPHERE_PASS},
 );
 
+ok(scalar(grep { $_ eq $vm_name } $v->list), 'list');
 ok($v->get_moid($vm_name), 'get_moid');
 ok($v->get_vm_path($vm_name), 'get_vm_path');
 my $powerstate = $v->get_vm_powerstate($vm_name);

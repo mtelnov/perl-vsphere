@@ -2,7 +2,7 @@ use strict;
 use Test::More;
 
 if ($ENV{VSPHERE_HOST} and $ENV{VSPHERE_USER} and $ENV{VSPHERE_PASS}) {
-    plan tests => 14;
+    plan tests => 15;
 } else {
     plan skip_all => 'Set environment variables VSPHERE_HOST, VSPHERE_USER, '.
                      'VSPHERE_PASS to run this test suite.';
@@ -45,3 +45,5 @@ isnt($v->_get_object_set_for_datacenter, '', '_get_object_set_for_datacenter');
 ok(defined $v->get_properties(of => 'HostSystem'), 'get_properties');
 
 ok(defined $v->get_property('datastoreBrowser', of => 'HostSystem'), 'get_property');
+
+ok(defined $v->list('HostSystem'), 'list');

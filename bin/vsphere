@@ -6,22 +6,20 @@ use warnings;
 use Data::Dumper;
 use File::Basename qw{ basename };
 use VMware::vSphere;
+use VMware::vSphere::Const;
 use VMware::vSphere::Simple;
+use List::Util qw{ first };
 
 &show_usage() if not @ARGV;
 
-for (qw{ VSPHERE_HOST VSPHERE_USER VSPHERE_PASS }) {
-    if (not defined $ENV{$_}) {
-        print STDERR "Error: Required environment variable '$_' isn't defined\n";
-        exit 1;
-    }
+# shell completion
+if ($ARGV[0] eq 'comp') {
+    shift @ARGV;
+    &completion(@ARGV);
+    exit 0;
 }
 
-my $v = VMware::vSphere::Simple->new(
-    host => $ENV{VSPHERE_HOST},
-    username => $ENV{VSPHERE_USER},
-    password => $ENV{VSPHERE_PASS},
-);
+my $v = &connect(1);
 
 my $method = shift @ARGV;
 
@@ -39,13 +37,33 @@ for (@ARGV) {
     }
 }
 
-my $r = $v->$method(@args);
-if (not ref $r) {
-    print $r, "\n";
-    exit 0;
+my @r = $v->$method(@args);
+exit 1 if @r == 0;
+if (grep { ref } @r) {
+    print Data::Dumper->Dump([\@r], ['Return']);
+} else {
+    $, = "\n";
+    $\ = "\n";
+    print @r;
 }
-print Data::Dumper->Dump([$r], ['Return']) if defined $r;
 exit 0;
+
+sub connect {
+    my $verbose = shift;
+    for (qw{ VSPHERE_HOST VSPHERE_USER VSPHERE_PASS }) {
+        if (not defined $ENV{$_}) {
+            print STDERR "Error: Required environment variable '$_'".
+                         "isn't defined\n" if $verbose;
+            exit 1;
+        }
+    }
+
+    return VMware::vSphere::Simple->new(
+        host => $ENV{VSPHERE_HOST},
+        username => $ENV{VSPHERE_USER},
+        password => $ENV{VSPHERE_PASS},
+    );
+}
 
 sub list_methods {
     my %methods;
@@ -72,6 +90,109 @@ sub show_usage {
     print STDERR "$_\n" for &list_methods();
     print STDERR "\nPlease see man or perldoc VMware::vSphere::Simple\n";
     exit 64;
+}
+
+sub completion {
+    my $index = shift;
+    my $cur = $_[$index];
+    my $prev = $_[$index-1];
+    my $method = $_[1];
+
+    $, = ' ';
+
+    if ($index == 1) {
+        print &list_methods();
+        return 1;
+    }
+
+    if ($index == 2) {
+        if ($method eq 'list') {
+            print STDOUT VMware::vSphere::Const::MO_TYPES;
+            return 1;
+        }
+
+        if ($method eq 'get_moid') {
+            my $type = defined $_[3] ? $_[3] : 'VirtualMachine';
+            eval { print &connect->list($type); };
+            return 1;
+        }
+
+        if ($method eq 'get_datastore_url') {
+            eval { print &connect->list('Datastore'); };
+            return 1;
+        }
+
+        if (first { $_ eq $method } qw{
+            get_vm_path get_vm_powerstate tools_is_running poweron_vm
+            poweroff_vm shutdown_vm reboot_vm create_snapshot
+            revert_to_current_snapshot reconfigure_vm connect_cdrom
+            disconnect_cdrom connect_floppy disconnect_floppy create_disk
+            remove_disk mount_tools_installer linked_clone
+            }
+        ) {
+            eval { print &connect->list; };
+            return 1;
+        }
+
+    }
+
+    if ($index == 3) {
+        if ($method eq 'get_moid') {
+            print STDOUT VMware::vSphere::Const::MO_TYPES;
+            return 1;
+        }
+    }
+
+    return 1 if $index == 2 and $method eq 'remove_snapshot';
+
+    if ($method eq 'add_nas_storage') {
+        if ($prev eq 'access_mode') {
+            print qw{ readWrite readOnly };
+            return 1;
+        }
+        if ($prev eq 'type') {
+            print qw{ NFS NFS41 CIFS };
+            return 1;
+        }
+    }
+
+    if ($method eq 'find_files') {
+        if ($prev eq 'datastore') {
+            eval { print &connect->list('Datastore'); };
+            return 1;
+        }
+    }
+
+    if ($method eq 'register_vm') {
+        if ($prev eq 'datacenter') {
+            eval { print &connect->list('Datacenter'); };
+            return 1;
+        }
+        if ($prev eq 'cluster') {
+            eval { print &connect->list('ClusterComputeResource'); };
+            return 1;
+        }
+        if ($prev eq 'host') {
+            eval { print &connect->list('HostSystem'); };
+            return 1;
+        }
+    }
+
+    my %proto = (
+        create_snapshot => [qw{ name description memory quiesce }],
+        remove_snapshot => [qw{ removeChildren consolidate }],
+        create_disk => [qw{ size thin controller unit }],
+        add_nas_storage => [qw{
+            host_name remote_host remote_path local_path type access_mode
+        }],
+        find_files => [qw{ datastore pattern path case_sensitive }],
+        register_vm => [qw{ datacenter cluster host path as_template }],
+    );
+    if (exists $proto{$method}) {
+        print @{$proto{$method}}
+            unless first { $prev eq $_ } @{$proto{$method}};
+        return 1;
+    }
 }
 
 __END__

@@ -335,7 +335,7 @@ sub refresh_service {
     $response =~ s/<(\w+) (?:\w+\:)?type="[^"]+">/<$1>/gs;
     my $xml = XMLin($response);
     for (keys %$xml) {
-        if ($_ =~ /body/si) {
+        if (/body/si) {
             $xml = $xml->{$_}{RetrieveServiceContentResponse}{returnval};
             last;
         }

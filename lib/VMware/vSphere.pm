@@ -171,6 +171,7 @@ sub get_properties {
         object_set  => undef,
         properties  => undef,
         max_objects => undef,
+        xml_params  => undef,
         @_
     );
 
@@ -228,6 +229,16 @@ sub get_properties {
         RetrievePropertiesEx => $spec,
     );
     my %result;
+
+    my @add_xml_params = $args{xml_params} ? @{$args{xml_params}} : ();
+    my %xml_params = (
+            ForceArray => ['objects', 'propSet', 'childSnapshotList'],
+            KeyAttr => {
+                childSnapshotList => 'snapshot',
+                propSet => 'name',
+            },
+            @add_xml_params,
+    );
     while (1) {
         # Strip root tags
         $response =~ s/.*<soapenv:Body>\s*<\w+Response[^>]*>\s*//s;
@@ -238,7 +249,7 @@ sub get_properties {
             print STDERR "Empty response\n" if $self->debug;
             last;
         }
-        my $xml = XMLin($response, ForceArray => ['objects', 'propSet']);
+        my $xml = XMLin($response, %xml_params);
         print Data::Dumper->Dump([$xml], ['xml']) if $self->debug;
         my $o = $xml->{objects};
         croak "Invalid response: $response"
@@ -623,7 +634,7 @@ isn't defined it sets to default based on object type (C<of>).
 
 Array reference with properties names. If omitted it requests all properties.
 
-=item max_objects
+=item max_objects =E<gt> $max_objects
 
 How many objects retrieve per single request. It doesn't affect the method
 result but allows to tune the network performance.
@@ -636,6 +647,10 @@ suspend the retrieval when the count of objects reaches the specified maximum.
 PropertyCollector policy may still limit the count to something less than
 maxObjects. Any remaining objects may be retrieved with
 ContinueRetrievePropertiesEx. A value less than or equal to 0 is illegal.
+
+=item xml_params =E<gt> \%xml_params
+
+Additional options for output XML parser (see L<XML::Simple/OPTIONS>).
 
 =back
 

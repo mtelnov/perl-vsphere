@@ -112,6 +112,32 @@ sub reboot_vm {
     return 1;
 }
 
+sub list_snapshots {
+    my ($self, $vm_name) = @_;
+    croak "VM name isn't defined" if not defined $vm_name;
+    my $p = $self->get_property('snapshot.rootSnapshotList',
+        moid => $self->get_moid($vm_name),
+    );
+    my %snapshots;
+    if (exists $p->{VirtualMachineSnapshotTree}{snapshot}) {
+        my $root = $p->{VirtualMachineSnapshotTree};
+        $snapshots{$root->{snapshot}} = $root->{name};
+        my $traverse;
+        $traverse = sub {
+            my $node = shift;
+            if (exists $node->{childSnapshotList}) {
+                my $c = $node->{childSnapshotList};
+                for (keys %$c) {
+                    $snapshots{$_} = $c->{$_}{name};
+                    &{$traverse}($c->{$_});
+                }
+            }
+        };
+        &{$traverse}($root);
+    }
+    return \%snapshots;
+}
+
 sub create_snapshot {
     my $self = shift;
     my $vm_name = shift;
@@ -150,6 +176,20 @@ sub revert_to_current_snapshot {
     $self->run_task(
         VirtualMachine => $self->get_moid($vm_name),
         'RevertToCurrentSnapshot_Task'
+    );
+    return 1;
+}
+
+sub revert_to_snapshot {
+    my ($self, $snapshot_id) = @_;
+    croak "Snapshot id isn't defined" if not defined $snapshot_id;
+
+    print STDERR "Revert to snapshot $snapshot_id\n"
+        if $self->debug;
+
+    $self->run_task(
+        VirtualMachineSnapshot => $snapshot_id,
+        'RevertToSnapshot_Task'
     );
     return 1;
 }
@@ -752,6 +792,11 @@ Issues a command to the guest operating system asking it to perform a reboot.
 Returns immediately and does not wait for the guest operating system to
 complete the operation.
 
+=item $v-E<gt>list_snapshots($vm_name)
+
+Returns a plain list with snapshots of the virtual machine as a hash reference
+with $snapshot_id =E<gt> $snapshot_name elements.
+
 =item $v-E<gt>create_snapshot($vm_name, name =E<gt> $snapshot_name, %options)
 
 Creates a new snapshot of the virtual machine. As a side effect, this updates
@@ -801,6 +846,10 @@ quiesce flag is ignored.
 
 Reverts the virtual machine to the current snapshot. If no snapshot exists, then
 the operation does nothing, and the virtual machine state remains unchanged.
+
+=item $v-E<gt>revert_to_snapshot($snapshot_id)
+
+Reverts the virtual machine to the snapshot specified by ID.
 
 =item $v-E<gt>remove_snapshot($snapshot_moid, %opts)
 

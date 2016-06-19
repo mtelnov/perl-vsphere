@@ -8,7 +8,7 @@ if (@missed_envvar) {
     plan skip_all => 'Set environment variables '.join(', ', @missed_envvar).
                      ' to run this test suite.';
 } else {
-    plan tests => 15;
+    plan tests => 17;
 }
 
 my $vm_name = $ENV{VSPHERE_TEST_VM};
@@ -77,8 +77,10 @@ if ($powerstate eq 'poweredOn') {
 
 my $snapshot = $v->create_snapshot($vm_name, name => 'test');
 ok($snapshot, 'create_snapshot');
+my $snapshots = $v->list_snapshots($vm_name);
+is($snapshots->{$snapshot}, 'test', 'list_snapshots');
 ok($v->poweron_vm($vm_name), 'poweron_vm');
-my $tools_is_running = &wait_for_vmtools;
+$tools_is_running = &wait_for_vmtools;
 
 SKIP: {
     skip "VMware Tools isn't installed on $vm_name", 2 until $tools_is_running;
@@ -107,4 +109,5 @@ ok(
 ok($v->create_disk($vm_name, size => 42 * 1024), 'create_disk');
 
 ok($v->revert_to_current_snapshot($vm_name), 'revert_to_current_snapshot');
+ok($v->revert_to_snapshot($snapshot), 'revert_to_snapshot');
 ok($v->remove_snapshot($snapshot), 'remove_snapshot');

@@ -72,6 +72,7 @@ sub vsphere {
         host => $ENV{VSPHERE_HOST},
         username => $ENV{VSPHERE_USER},
         password => $ENV{VSPHERE_PASS},
+        debug => $ENV{VSPHERE_DEBUG},
     );
 }
 
@@ -134,7 +135,7 @@ sub completion {
 
         if (any { $_ eq $m } qw{
             get_vm_path get_vm_powerstate tools_is_running poweron_vm
-            poweroff_vm shutdown_vm reboot_vm create_snapshot
+            poweroff_vm shutdown_vm reboot_vm list_snapshots create_snapshot
             revert_to_current_snapshot reconfigure_vm connect_cdrom
             disconnect_cdrom connect_floppy disconnect_floppy create_disk
             remove_disk mount_tools_installer linked_clone

@@ -4,34 +4,36 @@
 # Copyright (c) 2016 Mikhail Telnov <Mikhail.Telnov@gmail.com>
 #
 
-Name:           perl-VMware-vSphere
-Version:        1.00
-Release:        0
-#%define cpan_name VMware-vSphere
-Summary:        Pure Perl API and CLI for VMware vSphere
-License:        Artistic-1.0 or GPL-2.0+
-Group:          Development/Libraries/Perl
-Url:            https://github.com/mtelnov/perl-vsphere
-Source0:        %{cpan_name}-%{version}.tar.gz
-BuildArch:      noarch
-BuildRoot:      %{_tmppath}/%{name}-%{version}-build
-BuildRequires:  perl
-BuildRequires:  perl-macros
-BuildRequires:  perl(HTTP::Cookies)
-BuildRequires:  perl(HTTP::Request::Common)
-BuildRequires:  perl(IO::Socket::SSL)
-BuildRequires:  perl(LWP::UserAgent)
-BuildRequires:  perl(LWP::Protocol::https)
-BuildRequires:  perl(XML::Simple)
-BuildRequires:  perl(XML::Writer)
-Requires:  perl(HTTP::Cookies)
-Requires:  perl(HTTP::Request::Common)
-Requires:  perl(IO::Socket::SSL)
-Requires:  perl(LWP::UserAgent)
-Requires:  perl(LWP::Protocol::https)
-Requires:  perl(XML::Simple)
-Requires:  perl(XML::Writer)
-%{perl_requires}
+Name:    perl-VMware-vSphere
+Version: 1.00
+Release: 0
+%define  cpan_name VMware-vSphere
+Summary:   Pure Perl API and CLI for VMware vSphere
+License:   Artistic-1.0 or GPL-1.0+
+Group:     Development/Libraries/Perl
+Url:       https://github.com/mtelnov/perl-vsphere
+Source0:   %{cpan_name}-%{version}.tar.gz
+BuildArch: noarch
+BuildRoot: %{_tmppath}/%{name}-%{version}-build
+BuildRequires: perl
+BuildRequires: perl(base)
+BuildRequires: perl(ExtUtils::MakeMaker)
+BuildRequires: perl(HTTP::Cookies)
+BuildRequires: perl(HTTP::Request::Common)
+BuildRequires: perl(IO::Socket::SSL)
+BuildRequires: perl(LWP::Protocol::https)
+BuildRequires: perl(LWP::UserAgent)
+BuildRequires: perl(Test::More)
+BuildRequires: perl(XML::Simple)
+BuildRequires: perl(XML::Writer)
+Requires: perl(base)
+Requires: perl(HTTP::Cookies)
+Requires: perl(HTTP::Request::Common)
+Requires: perl(IO::Socket::SSL)
+Requires: perl(LWP::Protocol::https)
+Requires: perl(LWP::UserAgent)
+Requires: perl(XML::Simple)
+Requires: perl(XML::Writer)
 
 %description
 Simple CLI utility and Perl interface for VMware vSphere Web Services
@@ -49,15 +51,26 @@ find . -type f -print0 | xargs -0 chmod 644
 %{__make} test
 
 %install
-%perl_make_install
-%perl_process_packlist
+%{__make} DESTDIR=$RPM_BUILD_ROOT install_vendor
+find $RPM_BUILD_ROOT -type f -name .packlist -exec rm -f {} ';'
+find $RPM_BUILD_ROOT -type f -name perllocal.pod -exec rm -f {} ';'
 %{__mkdir_p} ${RPM_BUILD_ROOT}/%{_sysconfdir}/bash_completion.d
-%{__install} -m 755 bash_completion ${RPM_BUILD_ROOT}/%{_sysconfdir}/bash_completion.d/vsphere
-%perl_gen_filelist
+%{__install} -m 644 bash_completion ${RPM_BUILD_ROOT}/%{_sysconfdir}/bash_completion.d/vsphere
 
-%files -f %{name}.files
-%defattr(-,root,root,755)
+%files
+%{_bindir}/vsphere
+%{perl_vendorlib}/VMware
+%{perl_vendorlib}/VMware/vSphere.pm
+%{perl_vendorlib}/VMware/vSphere
+%{perl_vendorlib}/VMware/vSphere/Simple.pm
+%{perl_vendorlib}/VMware/vSphere/Const.pm
+%{_mandir}/man1/vsphere.1* 
+%{_mandir}/man3/VMware::vSphere.3pm* 
+%{_mandir}/man3/VMware::vSphere::Const.3pm* 
+%{_mandir}/man3/VMware::vSphere::Simple.3pm* 
+%config %{_sysconfdir}/bash_completion.d/vsphere
 %doc README LICENSE
-%config  %{_sysconfdir}/bash_completion.d/vsphere
 
 %changelog
+* Mon Jun 20 2016 Mikhail Telnov <mikhail.telnov@gmail.com> - 1.00-0
+- Initial package

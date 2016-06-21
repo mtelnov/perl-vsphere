@@ -545,9 +545,9 @@ High performance: it requests only what's actually needed.
 
 =head1 METHODS
 
-=over
+=head2 new
 
-=item $v = VMware::vSphere-E<gt>new(%args)
+    $v = VMware::vSphere->new(%args)
 
 The constructor initiates connection with specified host and returns a
 VMware::vSphere object. Connection will be logged out during object's
@@ -588,23 +588,34 @@ By default it disables any certificate checks:
 
 =back
 
-=item $response = $v-E<gt>request($mo_type =E<gt> $moid, $method)
+=head2 request
 
-=item $response = $v-E<gt>request($mo_type =E<gt> $moid, $method =E<gt> $spec, $do_not_try_login)
+    $response = $v->request($mo_type => $moid, $method)
+    $response = $v->request(
+        $mo_type => $moid,
+        $method => $spec,
+        $do_not_try_login,
+    )
 
 Calls specified method of the managed object. If C<$do_not_try_login> is true
 it doesn't try to relogin on NotAuthenticatedFault. Also if C<$do_not_try_login>
 is set to 2 it will not die on any error.
 
-=item $object_set = $v-E<gt>get_object_set(select_sets =E<gt> \@select_sets)
+=head2 get_object_set
 
-=item $object_set = $v-E<gt>get_object_set(select_sets =E<gt> \@select_sets, root =E<gt> $root, root_type =E<gt> $root_type)
+    $object_set = $v->get_object_set(select_sets => \@select_sets)
+    $object_set = $v->get_object_set(
+        select_sets => \@select_sets,
+        root => $root,
+        root_type => $root_type,
+    )
 
 Creates objectSet XML for C<get_properties> and C<get_property>.
 
-=item $all_vm_properties = $v-E<gt>get_properties
+=head2 get_properties
 
-=item $properties = $v-E<gt>get_properties(%parameters)
+    $all_vm_properties = $v->get_properties
+    $properties = $v->get_properties(%parameters)
 
 Returns a hash reference ($moid =E<gt> \%properties) with all or specified
 properties of managed objects.
@@ -654,46 +665,51 @@ Additional options for output XML parser (see L<XML::Simple/OPTIONS>).
 
 =back
 
-=item $property = $v-E<gt>get_property($property_name)
+=head2 get_property
 
-=item $property = $v-E<gt>get_property($property_name, %parameters)
+    $property = $v->get_property($property_name)
+    $property = $v->get_property($property_name, %parameters)
 
 Returns a value for the specified property of a single managed object.
 Optional parameters are identical to C<get_properties> excepts
 C<properties>.
 
-=item $result = $v-E<gt>run_task($mo_type =E<gt> $moid, $task =E<gt> $spec);
+=head2 run_task
+
+    $result = $v->run_task($mo_type =E<gt> $moid, $task =E<gt> $spec);
 
 Starts the task and waits until it's finished. On success it returns info.result
 propety of the task.
 
-=item $result = $v-E<gt>wait_for_task($task_id)
+=head2 wait_for_task
 
-=item $result = $v-E<gt>wait_for_task($task_id, $timeout)
+    $result = $v->wait_for_task($task_id)
+    $result = $v->wait_for_task($task_id, $timeout)
 
 Waits until the task is finished or dies after timeout (in seconds). Timeout is
 10 minutes by default.
 
-=item $service_instance = $v-E<gt>refresh_service
+=head2 refresh_service
+
+    $service_instance = $v->refresh_service
 
 Retrieves the properties of the service instance.
 
-=item $v-E<gt>login
+=head2 login
+
+    $v->login
 
 Log on to the server. Ordinally you shouldn't call it: it called by the
 constructor and if connection is lost during a C<request>. This method fails if
 the user name and password are incorrect, or if the user is valid but has no
 permissions granted.
 
-=item $boolean = $v-E<gt>debug
+=head2 debug
 
-Returns the current state of debug.
-
-=item $v-E<gt>debug($boolean)
+    $boolean = $v->debug
+    $v->debug($boolean)
 
 If enabled the module prints additional debug information to the C<STDERR>.
-
-=back
 
 =head1 SEE ALSO
 

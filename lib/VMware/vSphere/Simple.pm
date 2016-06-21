@@ -736,68 +736,88 @@ if you didn't read this yet.
 
 This module inherits the constructor and methods from L<VMware::vSphere>.
 
-=over
+=head2 list
 
-=item @mo_names = $v-E<gt>list()
-
-=item @mo_names = $v-E<gt>list($type)
+    @mo_names = $v->list()
+    @mo_names = $v->list($type)
 
 Returns a list with names of Managed Objects with specified C<$type>
 ('VirtualMachine' by default).
 
-=item $moid = $v-E<gt>get_moid($name)
+=head2 get_moid
 
-=item $moid = $v-E<gt>get_moid($mo_name, $mo_type)
+    $moid = $v->get_moid($name)
+    $moid = $v->get_moid($mo_name, $mo_type)
 
 Returns ID of the managed object by its name. C<$mo_type> is 'VirtualMachine' by
 default.
 
-=item $path = $v-E<gt>get_vm_path($vm_name)
+=head2 get_vm_path
+
+    $path = $v->get_vm_path($vm_name)
 
 Returns path to the VM configuration file.
 
-=item $powerstate = $v-E<gt>get_vm_powerstate($vm_name)
+=head2 get_vm_powerstate
+
+    $powerstate = $v->get_vm_powerstate($vm_name)
 
 Returns the string representation of VM powersate: poweredOff, poweredOn,
 suspended.
 
-=item $boolean = $v-E<gt>tools_is_running($vm_name)
+=head2 tools_is_running
+
+    $boolean = $v->tools_is_running($vm_name)
 
 Returns true if VMware Tools is running on the VM.
 
-=item $datastore_url = $v-E<gt>get_datastore_url($datastore_name)
+=head2 get_datastore_url
+
+    $datastore_url = $v->get_datastore_url($datastore_name)
 
 Returns unique locator for the datastore.
 
-=item $v-E<gt>poweron_vm($vm_name)
+=head2 poweron_vm
+
+    $v->poweron_vm($vm_name)
 
 Powers on the virtual machine. If the virtual machine is suspended, this method
 resumes execution from the suspend point.
 
-=item $v-E<gt>poweroff_vm($vm_name)
+=head2 poweroff_vm
+
+    $v->poweroff_vm($vm_name)
 
 Powers off the virtual machine. If this virtual machine is a fault tolerant
 primary virtual machine, this will result in the secondary virtual machine(s)
 getting powered off as well.
 
-=item $v-E<gt>shutdown_vm($vm_name)
+=head2 shutdown_vm
+
+    $v->shutdown_vm($vm_name)
 
 Issues a command to the guest operating system asking it to perform a clean
 shutdown of all services. Returns immediately and does not wait for the guest
 operating system to complete the operation.
 
-=item $v-E<gt>reboot_vm($vm_name)
+=head2 reboot_vm
+
+    $v->reboot_vm($vm_name)
 
 Issues a command to the guest operating system asking it to perform a reboot.
 Returns immediately and does not wait for the guest operating system to
 complete the operation.
 
-=item $v-E<gt>list_snapshots($vm_name)
+=head2 list_snapshots
+
+    $v->list_snapshots($vm_name)
 
 Returns a plain list with snapshots of the virtual machine as a hash reference
 with $snapshot_id =E<gt> $snapshot_name elements.
 
-=item $v-E<gt>create_snapshot($vm_name, name =E<gt> $snapshot_name, %options)
+=head2 create_snapshot
+
+    $v->create_snapshot($vm_name, name => $snapshot_name, %options)
 
 Creates a new snapshot of the virtual machine. As a side effect, this updates
 the current snapshot.
@@ -842,16 +862,22 @@ quiesce flag is ignored.
 
 =back
 
-=item $v-E<gt>revert_to_current_snapshot($vm_name)
+=head2 revert_to_current_snapshot
+
+    $v->revert_to_current_snapshot($vm_name)
 
 Reverts the virtual machine to the current snapshot. If no snapshot exists, then
 the operation does nothing, and the virtual machine state remains unchanged.
 
-=item $v-E<gt>revert_to_snapshot($snapshot_id)
+=head2 revert_to_snapshot
+
+    $v->revert_to_snapshot($snapshot_id)
 
 Reverts the virtual machine to the snapshot specified by ID.
 
-=item $v-E<gt>remove_snapshot($snapshot_moid, %opts)
+=head2 remove_snapshot
+
+    $v->remove_snapshot($snapshot_moid, %opts)
 
 Removes this snapshot and deletes any associated storage.
 
@@ -870,7 +896,9 @@ with other disk if possible. Defaults to true.
 
 =back
 
-=item $v-E<gt>reconfigure_vm($vm_name, %options)
+=head2 reconfigure_vm
+
+    $v->reconfigure_vm($vm_name, %options)
 
 Modifies virtual hardware or configuration of the virtual machine.
 
@@ -892,23 +920,33 @@ Size of a virtual machine's memory, in MB.
 
 =back
 
-=item $v-E<gt>connect_cdrom($vm_name, $iso)
+=head2 connect_cdrom
+
+    $v->connect_cdrom($vm_name, $iso)
 
 Mounts an ISO image to the virtual CD/DVD device.
 
-=item $v-E<gt>disconnect_cdrom($vm_name)
+=head2 disconnect_cdrom
+
+    $v->disconnect_cdrom($vm_name)
 
 Unmounts the virtual CD/DVD device.
 
-=item $v-E<gt>connect_floppy($vm_name, $image)
+=head2 connect_floppy
+
+    $v->connect_floppy($vm_name, $image)
 
 Connects floppy image to the VM.
 
-=item $v-E<gt>disconnect_floppy($vm_name)
+=head2 disconnect_floppy
+
+    $v->disconnect_floppy($vm_name)
 
 Disconnects virtual floppy drive.
 
-=item $v-E<gt>create_disk($vm_name, size =E<gt> $disk_size, %options)
+=head2 create_disk
+
+    $v->create_disk($vm_name, size => $disk_size, %options)
 
 Creates a new virtual disk in the virtual machine.
 
@@ -944,11 +982,15 @@ Unit number (1 by default).
 
 =back
 
-=item $v-E<gt>remove_disk($vm_name, $key)
+=head2 remove_disk
+
+    $v->remove_disk($vm_name, $key)
 
 Removes a virtual disk from the virtual machine by its ID (C<$key>).
 
-=item $v-E<gt>add_nas_storage(%parameters)
+=head2 add_nas_storage
+
+    $v->add_nas_storage(%parameters)
 
 Adds a NAS storage to the host and returns its MOID.
 
@@ -982,7 +1024,9 @@ Access mode to mount ('readWrite' by default).
 
 =back
 
-=item $v-E<gt>find_files(datastore =E<gt> $datastore, pattern =E<gt> $pattern, %options)
+=head2 find_files
+
+    $v->find_files(datastore => $datastore, pattern = $pattern, %options)
 
 Searches files on the C<$datastore> by C<$pattern> and returns a reference to
 the array with pathes.
@@ -1003,7 +1047,9 @@ type (disabled by default).
 
 =back
 
-=item $v-E<gt>register_vm($vm_name, %parameters)
+=head2 register_vm
+
+    $v->register_vm($vm_name, %parameters)
 
 Registers a virtual machine in the inventory.
 
@@ -1039,15 +1085,17 @@ Register as a VM template.
 
 =back
 
-=item $v-E<gt>mount_tools_installer($vm_name)
+=head2 mount_tools_installer
+
+    $v->mount_tools_installer($vm_name)
 
 Mounts the VMware Tools CD installer as a CD-ROM for the guest operating system.
 
-=item $v-E<gt>linked_clone($vm_name, $clone_name)
+=head2 linked_clone
+
+    $v->linked_clone($vm_name, $clone_name)
 
 Creates a linked clone from the VM snapshot.
-
-=back
 
 =head1 SEE ALSO
 

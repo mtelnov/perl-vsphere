@@ -9,6 +9,8 @@ use VMware::vSphere;
 use VMware::vSphere::Const;
 use VMware::vSphere::Simple;
 use List::Util qw{ any };
+use Pod::Find qw{ pod_where };
+use Pod::Usage;
 
 show_usage() if not @ARGV;
 
@@ -19,6 +21,14 @@ if ($ARGV[0] eq 'comp') {
     exit 0;
 }
 
+# Help
+if ($ARGV[0] eq 'help') {
+    shift @ARGV;
+    help(@ARGV);
+    exit 0;
+}
+
+# Create a VMware::vSphere::Simple object
 my $v = vsphere(1);
 
 my $method = shift @ARGV;
@@ -77,13 +87,19 @@ sub vsphere {
 }
 
 sub list_methods {
+    my $method = shift;
     my %methods;
     no strict 'refs';
     for my $m (qw{ VMware::vSphere:: VMware::vSphere::Simple:: }) {
         for (keys %{$m}) {
             next unless defined &{"${m}$_"};
-            next unless /^[a-z][a-z_]+/s;
-            next if /^(?:carp|croak|confess|new|debug)$/s;
+            if ($method and $method eq $_) {
+                my $module = $m;
+                $module =~ s/::$//;
+                return $module;
+            }
+            next unless /^[a-z][a-z_]+/;
+            next if /^(?:carp|croak|confess|new|debug)$/;
 
             $methods{$_} = 1;
         }
@@ -99,7 +115,9 @@ sub show_usage {
                  " <METHOD> [[PARAMETER1] [PARAMETER2]...]\n\n",
                  "Available methods:\n";
     print STDERR "$_\n" for list_methods();
-    print STDERR "\nPlease see man or perldoc VMware::vSphere::Simple\n";
+    print STDERR "\nRun '", basename($0), " help <METHOD>' to see a method ",
+                 "description\nor open full documentation in perldoc ",
+                 "VMware::vSphere::Simple\n";
     exit 64;
 }
 
@@ -112,6 +130,11 @@ sub completion {
     local $, = q{ };
 
     if ($i == 1) {
+        print 'help', list_methods();
+        return 1;
+    }
+
+    if ($i == 2 and $m eq 'help') {
         print list_methods();
         return 1;
     }
@@ -204,6 +227,25 @@ sub completion {
             unless any { $prev eq $_ } @{$proto{$m}};
         return 1;
     }
+}
+
+sub help {
+    my $method = shift;
+    return show_usage() unless $method;
+
+    my $module = list_methods($method);
+    if (not $module) {
+        print STDERR "Error: Method '$method' not found.\n";
+        return show_usage();
+    }
+
+    pod2usage(
+        -verbose => 99,
+        -sections => [ "METHODS/$method" ],
+        -input => pod_where({-inc => 1}, $module),
+        -exitval => 0,
+    );
+    return 1;
 }
 
 __END__

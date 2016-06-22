@@ -1,5 +1,7 @@
 package VMware::vSphere;
 
+our $VERSION = '1.00';
+
 use strict;
 use warnings;
 
@@ -12,8 +14,6 @@ use LWP::UserAgent;
 use LWP::Protocol::https;
 use XML::Simple;
 use XML::Writer;
-
-our $VERSION = '1.00';
 
 sub new {
     my $class = shift;

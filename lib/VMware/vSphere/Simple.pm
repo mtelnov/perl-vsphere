@@ -1,14 +1,17 @@
 package VMware::vSphere::Simple;
 
+our $VERSION = '1.00';
+
 use strict;
 use warnings;
 
 use Carp;
 use XML::Writer;
-use VMware::vSphere;
 
-our $VERSION = '1.00';
-our @ISA = qw{ VMware::vSphere };
+BEGIN {
+    require VMware::vSphere;
+    our @ISA = qw{ VMware::vSphere };
+}
 
 sub list {
     my ($self, $type) = @_;

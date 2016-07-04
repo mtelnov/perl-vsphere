@@ -8,7 +8,7 @@ if (@missed_envvar) {
     plan skip_all => 'Set environment variables '.join(', ', @missed_envvar).
                      ' to run this test suite.';
 } else {
-    plan tests => 17;
+    plan tests => 20;
 }
 
 my $vm_name = $ENV{VSPHERE_TEST_VM};
@@ -111,3 +111,16 @@ ok($v->create_disk($vm_name, size => 42 * 1024), 'create_disk');
 ok($v->revert_to_current_snapshot($vm_name), 'revert_to_current_snapshot');
 ok($v->revert_to_snapshot($snapshot), 'revert_to_snapshot');
 ok($v->remove_snapshot($snapshot), 'remove_snapshot');
+
+my $clone_name = $vm_name.time;
+my $ret;
+eval {
+    $ret = $v->linked_clone($vm_name, $clone_name);
+};
+SKIP: {
+    skip 'seems linked_clone is not supported here', 3
+        if $@ and $@ =~ /The operation is not supported on the object/;
+    ok(!$@, 'linked_clone eval');
+    ok($ret, 'linked_clone');
+    ok($v->delete($clone_name), 'delete');
+}

@@ -13,6 +13,44 @@ BEGIN {
     our @ISA = qw{ VMware::vSphere };
 }
 
+=head1 NAME
+
+VMware::vSphere::Simple - simple interface for VMware vSphere Web Services
+
+=head1 SYNOPSIS
+
+    my $v = VMware::vSphere::Simple->new(
+        host => $vcenter_host,
+        username => $vcenter_username,
+        password => $vcenter_password,
+    );
+
+    $v->poweron_vm($vm_name);
+
+=head1 DESCRIPTION
+
+This module provides an easy interface to VMware vSphere Web Services
+(management interface for VMware vCenter and VMware ESXi products).
+
+L<VMware::vSphere::Simple> extands L<VMware::vSphere>, so look its documentation
+if you didn't read this yet.
+
+=head1 METHODS
+
+This module inherits the constructor and methods from L<VMware::vSphere>.
+
+=cut
+
+=head2 list
+
+    @mo_names = $v->list()
+    @mo_names = $v->list($type)
+
+Returns a list with names of Managed Objects with specified C<$type>
+('VirtualMachine' by default).
+
+=cut
+
 sub list {
     my ($self, $type) = @_;
     $type ||= 'VirtualMachine';
@@ -20,6 +58,39 @@ sub list {
     my @list = sort map { $p->{$_}{name} } keys %$p;
     return @list;
 }
+#-------------------------------------------------------------------------------
+
+=head2 delete
+
+    $v->delete($vm_name);
+    $v->delete($mo_name, $mo_type);
+
+Removes the managed object (and related files if exist) by its name.
+C<$mo_type> is 'VirtualMachine' by default.
+
+=cut
+
+sub delete {
+    my ($self, $name, $type) = @_;
+    croak "Name of the managed object isn't defined" if not defined $name;
+    $type ||= 'VirtualMachine';
+
+    print STDERR "Delete $type with name '$name'\n" if $self->debug;
+
+    $self->run_task($type => $self->get_moid($name, $type), 'Destroy_Task');
+    return 1;
+}
+#-------------------------------------------------------------------------------
+
+=head2 get_moid
+
+    $moid = $v->get_moid($name)
+    $moid = $v->get_moid($mo_name, $mo_type)
+
+Returns ID of the managed object by its name. C<$mo_type> is 'VirtualMachine' by
+default.
+
+=cut
 
 sub get_moid {
     my ($self, $name, $type) = @_;
@@ -33,6 +104,15 @@ sub get_moid {
     );
     return (keys %$p)[0];
 }
+#-------------------------------------------------------------------------------
+
+=head2 get_vm_path
+
+    $path = $v->get_vm_path($vm_name)
+
+Returns path to the VM configuration file.
+
+=cut
 
 sub get_vm_path {
     my ($self, $vm_name) = @_;
@@ -42,6 +122,16 @@ sub get_vm_path {
         where => { name => $vm_name },
     );
 }
+#-------------------------------------------------------------------------------
+
+=head2 get_vm_powerstate
+
+    $powerstate = $v->get_vm_powerstate($vm_name)
+
+Returns the string representation of VM powersate: poweredOff, poweredOn,
+suspended.
+
+=cut
 
 sub get_vm_powerstate {
     my ($self, $vm_name) = @_;
@@ -51,6 +141,15 @@ sub get_vm_powerstate {
         where => { name => $vm_name },
     );
 }
+#-------------------------------------------------------------------------------
+
+=head2 tools_is_running
+
+    $boolean = $v->tools_is_running($vm_name)
+
+Returns true if VMware Tools is running on the VM.
+
+=cut
 
 sub tools_is_running {
     my ($self, $vm_name) = @_;
@@ -60,6 +159,15 @@ sub tools_is_running {
         where => { name => $vm_name },
     ) eq 'guestToolsRunning';
 }
+#-------------------------------------------------------------------------------
+
+=head2 get_datastore_url
+
+    $datastore_url = $v->get_datastore_url($datastore_name)
+
+Returns unique locator for the datastore.
+
+=cut
 
 sub get_datastore_url {
     my ($self, $name) = @_;
@@ -70,6 +178,16 @@ sub get_datastore_url {
         where => { 'info.name' => $name },
     );
 }
+#-------------------------------------------------------------------------------
+
+=head2 poweron_vm
+
+    $v->poweron_vm($vm_name)
+
+Powers on the virtual machine. If the virtual machine is suspended, this method
+resumes execution from the suspend point.
+
+=cut
 
 sub poweron_vm {
     my ($self, $vm_name) = @_;
@@ -81,6 +199,17 @@ sub poweron_vm {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 poweroff_vm
+
+    $v->poweroff_vm($vm_name)
+
+Powers off the virtual machine. If this virtual machine is a fault tolerant
+primary virtual machine, this will result in the secondary virtual machine(s)
+getting powered off as well.
+
+=cut
 
 sub poweroff_vm {
     my ($self, $vm_name) = @_;
@@ -92,6 +221,17 @@ sub poweroff_vm {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 shutdown_vm
+
+    $v->shutdown_vm($vm_name)
+
+Issues a command to the guest operating system asking it to perform a clean
+shutdown of all services. Returns immediately and does not wait for the guest
+operating system to complete the operation.
+
+=cut
 
 sub shutdown_vm {
     my ($self, $vm_name) = @_;
@@ -103,6 +243,17 @@ sub shutdown_vm {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 reboot_vm
+
+    $v->reboot_vm($vm_name)
+
+Issues a command to the guest operating system asking it to perform a reboot.
+Returns immediately and does not wait for the guest operating system to
+complete the operation.
+
+=cut
 
 sub reboot_vm {
     my ($self, $vm_name) = @_;
@@ -114,6 +265,16 @@ sub reboot_vm {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 list_snapshots
+
+    $v->list_snapshots($vm_name)
+
+Returns a plain list with snapshots of the virtual machine as a hash reference
+with $snapshot_id =E<gt> $snapshot_name elements.
+
+=cut
 
 sub list_snapshots {
     my ($self, $vm_name) = @_;
@@ -140,6 +301,56 @@ sub list_snapshots {
     }
     return \%snapshots;
 }
+#-------------------------------------------------------------------------------
+
+=head2 create_snapshot
+
+    $v->create_snapshot($vm_name, name => $snapshot_name, %options)
+
+Creates a new snapshot of the virtual machine. As a side effect, this updates
+the current snapshot.
+
+Required parameters:
+
+=over
+
+=item $vm_name
+
+Name of the target virtual machine.
+
+=item name =E<gt> $snapshot_name
+
+Name for the new snapshot.
+
+=back
+
+Optional parameters:
+
+=over
+
+=item description =E<gt> $description
+
+Description for this snapshot.
+
+=item memory =E<gt> $boolean
+
+If TRUE, a dump of the internal state of the virtual machine (basically a memory
+dump) is included in the snapshot. Memory snapshots consume time and resources,
+and thus take longer to create. When set to FALSE, the power state of the
+snapshot is set to powered off.
+
+
+=item quiesce =E<gt> $boolean
+
+If TRUE and the virtual machine is powered on when the snapshot is taken, VMware
+Tools is used to quiesce the file system in the virtual machine. This assures
+that a disk snapshot represents a consistent state of the guest file systems.
+If the virtual machine is powered off or VMware Tools are not available, the
+quiesce flag is ignored.
+
+=back
+
+=cut
 
 sub create_snapshot {
     my $self = shift;
@@ -168,6 +379,16 @@ sub create_snapshot {
         CreateSnapshot_Task => $spec
     );
 }
+#-------------------------------------------------------------------------------
+
+=head2 revert_to_current_snapshot
+
+    $v->revert_to_current_snapshot($vm_name)
+
+Reverts the virtual machine to the current snapshot. If no snapshot exists, then
+the operation does nothing, and the virtual machine state remains unchanged.
+
+=cut
 
 sub revert_to_current_snapshot {
     my ($self, $vm_name) = @_;
@@ -182,6 +403,15 @@ sub revert_to_current_snapshot {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 revert_to_snapshot
+
+    $v->revert_to_snapshot($snapshot_id)
+
+Reverts the virtual machine to the snapshot specified by ID.
+
+=cut
 
 sub revert_to_snapshot {
     my ($self, $snapshot_id) = @_;
@@ -196,6 +426,30 @@ sub revert_to_snapshot {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 remove_snapshot
+
+    $v->remove_snapshot($snapshot_moid, %opts)
+
+Removes this snapshot and deletes any associated storage.
+
+Following options are available:
+
+=over
+
+=item removeChildren =E<gt> $boolean
+
+Flag to specify removal of the entire snapshot subtree (enabled by default).
+
+=item consolidate =E<gt> $boolean
+
+If set to true, the virtual disk associated with this snapshot will be merged
+with other disk if possible. Defaults to true.
+
+=back
+
+=cut
 
 sub remove_snapshot {
     my $self = shift;
@@ -220,6 +474,33 @@ sub remove_snapshot {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 reconfigure_vm
+
+    $v->reconfigure_vm($vm_name, %options)
+
+Modifies virtual hardware or configuration of the virtual machine.
+
+The following options are available:
+
+=over
+
+=item numCPUs =E<gt> $int
+
+Number of virtual processors in a virtual machine.
+
+=item numCoresPerSocket =E<gt> $int
+
+Number of cores among which to distribute CPUs in this virtual machine.
+
+=item memoryMB =E<gt> $int
+
+Size of a virtual machine's memory, in MB.
+
+=back
+
+=cut
 
 sub reconfigure_vm {
     my $self = shift;
@@ -247,6 +528,15 @@ sub reconfigure_vm {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 connect_cdrom
+
+    $v->connect_cdrom($vm_name, $iso)
+
+Mounts an ISO image to the virtual CD/DVD device.
+
+=cut
 
 sub connect_cdrom {
     my ($self, $vm_name, $iso) = @_;
@@ -285,6 +575,15 @@ sub connect_cdrom {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 disconnect_cdrom
+
+    $v->disconnect_cdrom($vm_name)
+
+Unmounts the virtual CD/DVD device.
+
+=cut
 
 sub disconnect_cdrom {
     my ($self, $vm_name) = @_;
@@ -324,6 +623,15 @@ sub disconnect_cdrom {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 connect_floppy
+
+    $v->connect_floppy($vm_name, $image)
+
+Connects floppy image to the VM.
+
+=cut
 
 sub connect_floppy {
     my ($self, $vm_name, $image) = @_;
@@ -363,6 +671,15 @@ sub connect_floppy {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 disconnect_floppy
+
+    $v->disconnect_floppy($vm_name)
+
+Disconnects virtual floppy drive.
+
+=cut
 
 sub disconnect_floppy {
     my ($self, $vm_name) = @_;
@@ -404,6 +721,47 @@ sub disconnect_floppy {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 create_disk
+
+    $v->create_disk($vm_name, size => $disk_size, %options)
+
+Creates a new virtual disk in the virtual machine.
+
+Required parameters:
+
+=over
+
+=item $vm_name
+
+Name of the target virtual machine.
+
+=item size =E<gt> $disk_size
+
+Size of the disk in KB.
+
+=back
+
+Options:
+
+=over
+
+=item thin =E<gt> $boolean
+
+Enables Thin Provisioning (enabled by default).
+
+=item controller =E<gt> $controller_id
+
+Controller ID (1000 by default).
+
+=item unit =E<gt> $unit_number
+
+Unit number (1 by default).
+
+=back
+
+=cut
 
 sub create_disk {
     my $self = shift;
@@ -458,6 +816,15 @@ sub create_disk {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 remove_disk
+
+    $v->remove_disk($vm_name, $key)
+
+Removes a virtual disk from the virtual machine by its ID (C<$key>).
+
+=cut
 
 sub remove_disk {
     my ($self, $vm_name, $key) = @_;
@@ -514,6 +881,45 @@ sub remove_disk {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 add_nas_storage
+
+    $v->add_nas_storage(%parameters)
+
+Adds a NAS storage to the host and returns its MOID.
+
+Required parameters:
+
+=over
+
+=item host_name =E<gt> $host_name
+
+Display name of the host system (ESXi).
+
+=item remote_host =E<gt> $remote_host
+
+Hostname or IP address of the NAS.
+
+=item remote_path =E<gt> $remote_path
+
+Path to the NAS storage.
+
+=item local_path =E<gt> $local_path
+
+Name for the local mount point.
+
+=item type =E<gt> $type
+
+NAS type ('nfs' by default).
+
+=item access_mode =E<gt> $access_mode
+
+Access mode to mount ('readWrite' by default).
+
+=back
+
+=cut
 
 sub add_nas_storage {
     my $self = shift;
@@ -557,6 +963,32 @@ sub add_nas_storage {
         if $response !~ /<returnval type="Datastore">([^<]+)<\/returnval>/;
     return $1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 find_files
+
+    $v->find_files(datastore => $datastore, pattern = $pattern, %options)
+
+Searches files on the C<$datastore> by C<$pattern> and returns a reference to
+the array with pathes.
+
+The following options are available:
+
+=over
+
+=item path =E<gt> $path
+
+Top level directory at the storage to start search (root of datastore by
+default).
+
+=item case_sensitive =E<gt> $boolean
+
+This flag indicates whether or not to search using a case insensitive match on
+type (disabled by default).
+
+=back
+
+=cut
 
 sub find_files {
     my $self = shift;
@@ -605,6 +1037,47 @@ sub find_files {
         for @{$result->{HostDatastoreBrowserSearchResults}};
     return \@pathes;
 }
+#-------------------------------------------------------------------------------
+
+=head2 register_vm
+
+    $v->register_vm($vm_name, %parameters)
+
+Registers a virtual machine in the inventory.
+
+Required parameters:
+
+=over
+
+=item datacenter =E<gt> $datacenter
+
+Name of the target datacenter.
+
+=item cluster =E<gt> $cluster
+
+Name of the target cluster.
+
+=item host =E<gt> $host
+
+Name of the target host system.
+
+=item path =E<gt> $path
+
+Path to the config file of virtual machine.
+
+=back
+
+Optional parameters:
+
+=over
+
+=item as_template =E<gt> $boolean
+
+Register as a VM template.
+
+=back
+
+=cut
 
 sub register_vm {
     my $self = shift;
@@ -651,6 +1124,15 @@ sub register_vm {
         RegisterVM_Task => $spec,
     );
 }
+#-------------------------------------------------------------------------------
+
+=head2 mount_tools_installer
+
+    $v->mount_tools_installer($vm_name)
+
+Mounts the VMware Tools CD installer as a CD-ROM for the guest operating system.
+
+=cut
 
 sub mount_tools_installer {
     my ($self, $vm_name) = @_;
@@ -662,6 +1144,15 @@ sub mount_tools_installer {
     );
     return 1;
 }
+#-------------------------------------------------------------------------------
+
+=head2 linked_clone
+
+    $v->linked_clone($vm_name, $clone_name)
+
+Creates a linked clone from the VM snapshot.
+
+=cut
 
 sub linked_clone {
     my ($self, $vm_name, $clone_name) = @_;
@@ -708,397 +1199,11 @@ sub linked_clone {
         CloneVM_Task   => $spec,
     );
 }
+#-------------------------------------------------------------------------------
 
 1;
 
 __END__
-
-=head1 NAME
-
-VMware::vSphere::Simple - simple interface for VMware vSphere Web Services
-
-=head1 SYNOPSIS
-
-    my $v = VMware::vSphere::Simple->new(
-        host => $vcenter_host,
-        username => $vcenter_username,
-        password => $vcenter_password,
-    );
-
-    $v->poweron_vm($vm_name);
-
-=head1 DESCRIPTION
-
-This module provides an easy interface to VMware vSphere Web Services
-(management interface for VMware vCenter and VMware ESXi products).
-
-L<VMware::vSphere::Simple> extands L<VMware::vSphere>, so look its documentation
-if you didn't read this yet.
-
-=head1 METHODS
-
-This module inherits the constructor and methods from L<VMware::vSphere>.
-
-=head2 list
-
-    @mo_names = $v->list()
-    @mo_names = $v->list($type)
-
-Returns a list with names of Managed Objects with specified C<$type>
-('VirtualMachine' by default).
-
-=head2 get_moid
-
-    $moid = $v->get_moid($name)
-    $moid = $v->get_moid($mo_name, $mo_type)
-
-Returns ID of the managed object by its name. C<$mo_type> is 'VirtualMachine' by
-default.
-
-=head2 get_vm_path
-
-    $path = $v->get_vm_path($vm_name)
-
-Returns path to the VM configuration file.
-
-=head2 get_vm_powerstate
-
-    $powerstate = $v->get_vm_powerstate($vm_name)
-
-Returns the string representation of VM powersate: poweredOff, poweredOn,
-suspended.
-
-=head2 tools_is_running
-
-    $boolean = $v->tools_is_running($vm_name)
-
-Returns true if VMware Tools is running on the VM.
-
-=head2 get_datastore_url
-
-    $datastore_url = $v->get_datastore_url($datastore_name)
-
-Returns unique locator for the datastore.
-
-=head2 poweron_vm
-
-    $v->poweron_vm($vm_name)
-
-Powers on the virtual machine. If the virtual machine is suspended, this method
-resumes execution from the suspend point.
-
-=head2 poweroff_vm
-
-    $v->poweroff_vm($vm_name)
-
-Powers off the virtual machine. If this virtual machine is a fault tolerant
-primary virtual machine, this will result in the secondary virtual machine(s)
-getting powered off as well.
-
-=head2 shutdown_vm
-
-    $v->shutdown_vm($vm_name)
-
-Issues a command to the guest operating system asking it to perform a clean
-shutdown of all services. Returns immediately and does not wait for the guest
-operating system to complete the operation.
-
-=head2 reboot_vm
-
-    $v->reboot_vm($vm_name)
-
-Issues a command to the guest operating system asking it to perform a reboot.
-Returns immediately and does not wait for the guest operating system to
-complete the operation.
-
-=head2 list_snapshots
-
-    $v->list_snapshots($vm_name)
-
-Returns a plain list with snapshots of the virtual machine as a hash reference
-with $snapshot_id =E<gt> $snapshot_name elements.
-
-=head2 create_snapshot
-
-    $v->create_snapshot($vm_name, name => $snapshot_name, %options)
-
-Creates a new snapshot of the virtual machine. As a side effect, this updates
-the current snapshot.
-
-Required parameters:
-
-=over
-
-=item $vm_name
-
-Name of the target virtual machine.
-
-=item name =E<gt> $snapshot_name
-
-Name for the new snapshot.
-
-=back
-
-Optional parameters:
-
-=over
-
-=item description =E<gt> $description
-
-Description for this snapshot.
-
-=item memory =E<gt> $boolean
-
-If TRUE, a dump of the internal state of the virtual machine (basically a memory
-dump) is included in the snapshot. Memory snapshots consume time and resources,
-and thus take longer to create. When set to FALSE, the power state of the
-snapshot is set to powered off.
-
-
-=item quiesce =E<gt> $boolean
-
-If TRUE and the virtual machine is powered on when the snapshot is taken, VMware
-Tools is used to quiesce the file system in the virtual machine. This assures
-that a disk snapshot represents a consistent state of the guest file systems.
-If the virtual machine is powered off or VMware Tools are not available, the
-quiesce flag is ignored.
-
-=back
-
-=head2 revert_to_current_snapshot
-
-    $v->revert_to_current_snapshot($vm_name)
-
-Reverts the virtual machine to the current snapshot. If no snapshot exists, then
-the operation does nothing, and the virtual machine state remains unchanged.
-
-=head2 revert_to_snapshot
-
-    $v->revert_to_snapshot($snapshot_id)
-
-Reverts the virtual machine to the snapshot specified by ID.
-
-=head2 remove_snapshot
-
-    $v->remove_snapshot($snapshot_moid, %opts)
-
-Removes this snapshot and deletes any associated storage.
-
-Following options are available:
-
-=over
-
-=item removeChildren =E<gt> $boolean
-
-Flag to specify removal of the entire snapshot subtree (enabled by default).
-
-=item consolidate =E<gt> $boolean
-
-If set to true, the virtual disk associated with this snapshot will be merged
-with other disk if possible. Defaults to true.
-
-=back
-
-=head2 reconfigure_vm
-
-    $v->reconfigure_vm($vm_name, %options)
-
-Modifies virtual hardware or configuration of the virtual machine.
-
-The following options are available:
-
-=over
-
-=item numCPUs =E<gt> $int
-
-Number of virtual processors in a virtual machine.
-
-=item numCoresPerSocket =E<gt> $int
-
-Number of cores among which to distribute CPUs in this virtual machine.
-
-=item memoryMB =E<gt> $int
-
-Size of a virtual machine's memory, in MB.
-
-=back
-
-=head2 connect_cdrom
-
-    $v->connect_cdrom($vm_name, $iso)
-
-Mounts an ISO image to the virtual CD/DVD device.
-
-=head2 disconnect_cdrom
-
-    $v->disconnect_cdrom($vm_name)
-
-Unmounts the virtual CD/DVD device.
-
-=head2 connect_floppy
-
-    $v->connect_floppy($vm_name, $image)
-
-Connects floppy image to the VM.
-
-=head2 disconnect_floppy
-
-    $v->disconnect_floppy($vm_name)
-
-Disconnects virtual floppy drive.
-
-=head2 create_disk
-
-    $v->create_disk($vm_name, size => $disk_size, %options)
-
-Creates a new virtual disk in the virtual machine.
-
-Required parameters:
-
-=over
-
-=item $vm_name
-
-Name of the target virtual machine.
-
-=item size =E<gt> $disk_size
-
-Size of the disk in KB.
-
-=back
-
-Options:
-
-=over
-
-=item thin =E<gt> $boolean
-
-Enables Thin Provisioning (enabled by default).
-
-=item controller =E<gt> $controller_id
-
-Controller ID (1000 by default).
-
-=item unit =E<gt> $unit_number
-
-Unit number (1 by default).
-
-=back
-
-=head2 remove_disk
-
-    $v->remove_disk($vm_name, $key)
-
-Removes a virtual disk from the virtual machine by its ID (C<$key>).
-
-=head2 add_nas_storage
-
-    $v->add_nas_storage(%parameters)
-
-Adds a NAS storage to the host and returns its MOID.
-
-Required parameters:
-
-=over
-
-=item host_name =E<gt> $host_name
-
-Display name of the host system (ESXi).
-
-=item remote_host =E<gt> $remote_host
-
-Hostname or IP address of the NAS.
-
-=item remote_path =E<gt> $remote_path
-
-Path to the NAS storage.
-
-=item local_path =E<gt> $local_path
-
-Name for the local mount point.
-
-=item type =E<gt> $type
-
-NAS type ('nfs' by default).
-
-=item access_mode =E<gt> $access_mode
-
-Access mode to mount ('readWrite' by default).
-
-=back
-
-=head2 find_files
-
-    $v->find_files(datastore => $datastore, pattern = $pattern, %options)
-
-Searches files on the C<$datastore> by C<$pattern> and returns a reference to
-the array with pathes.
-
-The following options are available:
-
-=over
-
-=item path =E<gt> $path
-
-Top level directory at the storage to start search (root of datastore by
-default).
-
-=item case_sensitive =E<gt> $boolean
-
-This flag indicates whether or not to search using a case insensitive match on
-type (disabled by default).
-
-=back
-
-=head2 register_vm
-
-    $v->register_vm($vm_name, %parameters)
-
-Registers a virtual machine in the inventory.
-
-Required parameters:
-
-=over
-
-=item datacenter =E<gt> $datacenter
-
-Name of the target datacenter.
-
-=item cluster =E<gt> $cluster
-
-Name of the target cluster.
-
-=item host =E<gt> $host
-
-Name of the target host system.
-
-=item path =E<gt> $path
-
-Path to the config file of virtual machine.
-
-=back
-
-Optional parameters:
-
-=over
-
-=item as_template =E<gt> $boolean
-
-Register as a VM template.
-
-=back
-
-=head2 mount_tools_installer
-
-    $v->mount_tools_installer($vm_name)
-
-Mounts the VMware Tools CD installer as a CD-ROM for the guest operating system.
-
-=head2 linked_clone
-
-    $v->linked_clone($vm_name, $clone_name)
-
-Creates a linked clone from the VM snapshot.
 
 =head1 SEE ALSO
 

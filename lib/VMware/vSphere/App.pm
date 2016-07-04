@@ -107,7 +107,7 @@ sub completion {
             return 1;
         }
 
-        if ($m eq 'get_moid') {
+        if ($m eq 'get_moid' or $m eq 'delete') {
             my $type = defined $_[3] ? $_[3] : 'VirtualMachine';
             eval { print { $self->{stdout} } vsphere()->list($type); };
             return 1;
@@ -133,7 +133,7 @@ sub completion {
     }
 
     if ($i == 3) {
-        if ($m eq 'get_moid') {
+        if ($m eq 'get_moid' or $m eq 'delete') {
             print { $self->{stdout} } VMware::vSphere::Const::MO_TYPES;
             return 1;
         }

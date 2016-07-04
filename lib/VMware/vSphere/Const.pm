@@ -3,6 +3,8 @@ package VMware::vSphere::Const;
 use strict;
 use warnings;
 
+our $VERSION = 1.00;
+
 use constant MO_TYPES => qw{
 	Alarm
 	AlarmManager

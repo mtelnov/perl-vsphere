@@ -190,6 +190,8 @@ sub get_properties {
             $object_set = $self->_get_object_set_for_cluster;
         } elsif ($args{of} eq 'Datacenter') {
             $object_set = $self->_get_object_set_for_datacenter;
+        } elsif ($args{of} eq 'Network') {
+            $object_set = $self->_get_object_set_for_network;
         } else {
             croak "Parameter 'object_set' should be set for this type";
         }
@@ -489,6 +491,23 @@ sub _get_object_set_for_datacenter {
                 name => 'folders',
                 path => 'childEntity',
                 select_sets => [ 'folders' ],
+            },
+        ]);
+}
+
+sub _get_object_set_for_network {
+    my $self = shift;
+    return $self->get_object_set(
+        select_sets => [
+            {
+                name => 'folders',
+                path => 'childEntity',
+                select_sets => [ 'folders', 'datacenter' ],
+            },
+            {
+                name => 'datacenter',
+                type => 'Datacenter',
+                path => 'network',
             },
         ]);
 }

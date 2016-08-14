@@ -123,7 +123,8 @@ sub completion {
             poweroff_vm shutdown_vm reboot_vm list_snapshots create_snapshot
             revert_to_current_snapshot reconfigure_vm connect_cdrom
             disconnect_cdrom connect_floppy disconnect_floppy create_disk
-            remove_disk mount_tools_installer linked_clone
+            remove_disk mount_tools_installer linked_clone run_in_vm
+            list_vm_processes
             }
         ) {
             eval { print { $self->{stdout} } vsphere()->list; };

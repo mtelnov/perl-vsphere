@@ -6,6 +6,7 @@ use strict;
 use warnings;
 
 use Carp;
+use XML::Simple;
 use XML::Writer;
 
 BEGIN {
@@ -1198,6 +1199,161 @@ sub linked_clone {
         VirtualMachine => $vm_id,
         CloneVM_Task   => $spec,
     );
+}
+#-------------------------------------------------------------------------------
+
+=head2 run_in_vm
+
+    $pid = $v->run_in_vm($vm_name, $username, $password, $cmd, %options)
+
+Starts a program in the guest operating system and returns its pid. When the 
+process completes, its exit code and end time will be available for 5 minutes 
+after completion.
+
+Required arguments:
+
+=over
+
+=item $vm_name
+
+Name of the target virtual machine.
+
+=item $username
+
+Login to authenticate in the guest operating system.
+
+=item $password
+
+Password for this login.
+
+=item $cmd
+
+The absolute path to the program to start. For Linux guest operating systems, 
+/bin/bash is used to start the program. For Solaris guest operating systems, 
+/bin/bash is used to start the program if it exists. Otherwise /bin/sh is used.
+If /bin/sh is used, then the process ID will be that of the shell used to start 
+the program, rather than the program itself, due to the differences in how 
+/bin/sh and /bin/bash work.
+
+=back
+
+Optional parameters:
+
+=over
+
+=item args =E<gt> $arguments
+
+The arguments to the program. In Linux and Solaris guest operating systems, the 
+program will be executed by a guest shell. This allows stdio redirection, but 
+may also require that characters which must be escaped to the shell also be 
+escaped on the command line provided. For Windows guest operating systems, 
+prefixing the command with "cmd /c" can provide stdio redirection. 
+
+=item dir =E<gt> $working_directory
+
+The absolute path of the working directory for the program to be run. VMware 
+recommends explicitly setting the working directory for the program to be run. 
+If this value is unset or is an empty string, the behavior depends on the guest 
+operating system. For Linux guest operating systems, if this value is unset or 
+is an empty string, the working directory will be the home directory of the user 
+associated with the guest authentication. For other guest operating systems, if 
+this value is unset, the behavior is unspecified.
+
+=item env =E<gt> \@environment_variables
+
+An array of environment variables, specified in the guest OS notation 
+(eg PATH=c:\bin;c:\windows\system32 or LD_LIBRARY_PATH=/usr/lib:/lib), to be set 
+for the program being run. Note that these are not additions to the default 
+environment variables; they define the complete set available to the program. 
+If none are specified the values are guest dependent. 
+
+=back
+
+=cut
+
+sub run_in_vm {
+    my $self     = shift;
+    my $vm_name  = shift;
+    my $username = shift;
+    my $password = shift;
+    my $cmd      = shift;
+    my %args = (
+        args => '',
+        dir  => undef,
+        env  => [],
+        @_,
+    );
+
+    print STDERR "Run '$cmd $args{args}' in $vm_name\n" if $self->debug;
+
+    my $process_manager = $self->get_property('processManager',
+        of   => 'GuestOperationsManager',
+        moid => $self->{service}{guestOperationsManager},
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(vm => $self->get_moid($vm_name), type => 'VirtualMachine');
+    $w->startTag('auth', 'xsi:type' => 'NamePasswordAuthentication');
+    $w->dataElement(interactiveSession => 'false');
+    $w->dataElement(username => $username);
+    $w->dataElement(password => $password);
+    $w->endTag('auth');
+    $w->startTag('spec');
+    $w->dataElement(programPath => $cmd);
+    $w->dataElement(arguments => $args{args});
+    $w->dataElement(workingDirectory => $args{dir}) if $args{dir};
+    $w->dataElement(envVariables => $_) for @{$args{env}};
+    $w->endTag('spec');
+    $w->end;
+
+    my $response = $self->request(
+        GuestProcessManager => $process_manager,
+        StartProgramInGuest => $spec,
+    );
+    if ($response =~ m|<returnval>(\d+)</returnval>|) {
+        return $1;
+    }
+    croak "Invalid response: $response";
+}
+#-------------------------------------------------------------------------------
+
+=head2 list_vm_processes
+
+    $proc_info = $v->list_vm_processes($vm_name, $username, $password, @pids)
+
+List the processes running in the guest operating system, plus those started by 
+C<run_in_vm()> that have recently completed.
+
+=cut
+
+sub list_vm_processes {
+    my ($self, $vm_name, $username, $password, @pids) = @_;
+
+    my $process_manager = $self->get_property('processManager',
+        of   => 'GuestOperationsManager',
+        moid => $self->{service}{guestOperationsManager},
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(vm => $self->get_moid($vm_name), type => 'VirtualMachine');
+    $w->startTag('auth', 'xsi:type' => 'NamePasswordAuthentication');
+    $w->dataElement(interactiveSession => 'false');
+    $w->dataElement(username => $username);
+    $w->dataElement(password => $password);
+    $w->endTag('auth');
+    $w->dataElement(pids => $_) for @pids;
+    $w->end;
+
+    my $response = $self->request(
+        GuestProcessManager => $process_manager,
+        ListProcessesInGuest => $spec,
+    );
+    my $xml = XMLin(
+        $response,
+        ForceArray => [qw{ returnval }],
+        KeyAttr    => [qw{ pid }]
+    );
+    return $xml->{'soapenv:Body'}{ListProcessesInGuestResponse}{returnval};
 }
 #-------------------------------------------------------------------------------
 

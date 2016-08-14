@@ -15,3 +15,4 @@ t/03-vsphere.t
 t/04-simple.t
 t/05-vm_related.t
 t/06-app.t
+t/07-guest_op.t

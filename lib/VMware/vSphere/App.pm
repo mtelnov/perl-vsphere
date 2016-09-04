@@ -1,6 +1,6 @@
 package VMware::vSphere::App;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 use strict;
 use warnings;
@@ -124,7 +124,7 @@ sub completion {
             revert_to_current_snapshot reconfigure_vm connect_cdrom
             disconnect_cdrom connect_floppy disconnect_floppy create_disk
             remove_disk mount_tools_installer linked_clone run_in_vm
-            list_vm_processes
+            list_vm_processes add_disk
             }
         ) {
             eval { print { $self->{stdout} } vsphere()->list; };
@@ -181,11 +181,12 @@ sub completion {
     my %proto = (
         create_snapshot => [qw{ name description memory quiesce }],
         remove_snapshot => [qw{ removeChildren consolidate }],
-        create_disk => [qw{ size thin controller unit }],
+        add_disk => [qw{ size thin controller unit file mode }],
+        create_disk => [qw{ size thin controller unit file mode }],
         add_nas_storage => [qw{
             host_name remote_host remote_path local_path type access_mode
         }],
-        find_files => [qw{ datastore pattern path case_sensitive }],
+        find_files => [qw{ datastore pattern path case_sensitive with_info }],
         register_vm => [qw{ datacenter cluster host path as_template }],
     );
     if (exists $proto{$m}) {

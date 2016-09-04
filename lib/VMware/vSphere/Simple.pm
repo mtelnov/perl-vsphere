@@ -1,6 +1,6 @@
 package VMware::vSphere::Simple;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 use strict;
 use warnings;
@@ -724,9 +724,10 @@ sub disconnect_floppy {
 }
 #-------------------------------------------------------------------------------
 
-=head2 create_disk
+=head2 add_disk
 
-    $v->create_disk($vm_name, size => $disk_size, %options)
+    $v->add_disk($vm_name, size => $disk_size, %options)
+    $v->add_disk($vm_name, file => $existent_vmdk, %options)
 
 Creates a new virtual disk in the virtual machine.
 
@@ -740,7 +741,12 @@ Name of the target virtual machine.
 
 =item size =E<gt> $disk_size
 
-Size of the disk in KB.
+Size of the disk in KB. Can be ommited if existent C<file> is specified.
+
+=item file =E<gt> $existent_vmdk
+
+Path to the existent file with virtual disk in format '[datastore_name] 
+path/file.vmdk'. Can be ommited in case of creating a new disk.
 
 =back
 
@@ -760,11 +766,44 @@ Controller ID (1000 by default).
 
 Unit number (1 by default).
 
+=item mode =E<gt> $disk_mode
+
+Availabel values:
+
+=over
+
+=item persistent (default)
+
+Changes are immediately and permanently written to the virtual disk.
+
+=item nonpersistent
+
+Changes to virtual disk are made to a redo log and discarded at power off.
+
+=item independent_nonpersistent
+
+Same as nonpersistent, but not affected by snapshots.
+
+=item independent_persistent
+
+Same as persistent, but not affected by snapshots.
+
+=item append
+
+Changes are appended to the redo log; you revoke changes by removing the undo 
+log.
+
+=item undoable
+
+Changes are made to a redo log, but you are given the option to commit or undo.
+
+=back
+
 =back
 
 =cut
 
-sub create_disk {
+sub add_disk {
     my $self = shift;
     my $vm_name = shift;
     my %args = (
@@ -772,28 +811,39 @@ sub create_disk {
         thin       => 1,     # enable Thin Provisioning
         controller => 1000,  # controller ID
         unit       => 1,     # unit number
+        file       => undef, # path to existent disk file
+        mode       => 'persistent', # disk mode
         @_,
     );
     croak "VM name isn't defined" if not defined $vm_name;
-    for (qw{ size }) {
-        croak "Required parameter '$_' isn't defined" if not defined $args{$_};
-    }
+    $args{file} ||= '';
 
-    print STDERR "Create virtual disk in VM '$vm_name' with size ".
-                 "$args{size}KB\n" if $self->debug;
+    if ($args{file}) {
+        print STDERR "Add virtual disk '$args{file}' to VM '$vm_name'"
+            if $self->debug;
+    } else {
+        for (qw{ size }) {
+            croak "Required parameter '$_' isn't defined"
+                if not defined $args{$_};
+        }
+
+        print STDERR "Create virtual disk in VM '$vm_name' with size ".
+                     "$args{size}KB\n" if $self->debug;
+    }
+    $args{size} ||= '';
 
     my $w = XML::Writer->new(OUTPUT => \my $spec);
     $w->startTag('spec');
     $w->startTag('deviceChange');
     $w->dataElement(operation => 'add');
-    $w->dataElement(fileOperation => 'create');
+    $w->dataElement(fileOperation => 'create') unless $args{file};
     $w->startTag('device', 'xsi:type' => 'VirtualDisk');
     $w->dataElement(key => '-100');
     $w->startTag(
         'backing', 'xsi:type' => 'VirtualDiskFlatVer2BackingInfo'
     );
-    $w->dataElement(fileName => '');
-    $w->dataElement(diskMode => 'persistent');
+    $w->dataElement(fileName => $args{file});
+    $w->dataElement(diskMode => $args{mode});
     $w->dataElement(split => 'false');
     $w->dataElement(writeThrough => 'false');
     $w->dataElement(thinProvisioned => $args{thin} ? 'true' : 'false');
@@ -816,6 +866,17 @@ sub create_disk {
         ReconfigVM_Task => $spec
     );
     return 1;
+}
+#-------------------------------------------------------------------------------
+
+=head2 create_disk
+
+Alias for L<add_disk>
+
+=cut
+
+sub create_disk {
+    return add_disk(@_);
 }
 #-------------------------------------------------------------------------------
 
@@ -970,8 +1031,8 @@ sub add_nas_storage {
 
     $v->find_files(datastore => $datastore, pattern = $pattern, %options)
 
-Searches files on the C<$datastore> by C<$pattern> and returns a reference to
-the array with pathes.
+Searches files on the C<$datastore> by C<$pattern> and returns an array 
+reference with pathes or a hash reference if C<with_info> option is true.
 
 The following options are available:
 
@@ -987,6 +1048,10 @@ default).
 This flag indicates whether or not to search using a case insensitive match on
 type (disabled by default).
 
+=item with_info =E<gt> $boolean
+
+Extends return with file info.
+
 =back
 
 =cut
@@ -998,6 +1063,7 @@ sub find_files {
         pattern        => undef,    # pattern for filenames
         path           => undef,    # TODO
         case_sensitive => 0,        # TODO
+        with_info      => 0,        # also return file info
         @_,
     );
     for (qw{ datastore pattern }) {
@@ -1019,7 +1085,7 @@ sub find_files {
     $w->emptyTag('query', 'xsi:type' => 'FolderFileQuery');
     $w->emptyTag('query');
     $w->startTag('details');
-    $w->dataElement($_ => 'false')
+    $w->dataElement($_ => ($args{with_info} ? 'true' : 'false'))
         for qw{ fileType fileSize modification fileOwner };
     $w->endTag('details');
     $w->dataElement(
@@ -1033,9 +1099,24 @@ sub find_files {
         HostDatastoreBrowser => $browser,
         SearchDatastoreSubFolders_Task => $spec,
     );
+    if ($args{with_info}) {
+        my %info;
+        for my $file (@{$result->{HostDatastoreBrowserSearchResults}}) {
+            next unless defined $file->{file};
+            my $path = $file->{folderPath}.$file->{file}{path};
+            for (keys %{$file->{file}}) {
+                next if $_ eq 'path';
+                $info{$path}->{$_} = $file->{file}{$_};
+            }
+        }
+        return \%info;
+    }
     my @pathes;
-    push @pathes, $_->{folderPath}.$_->{file}{path}
-        for @{$result->{HostDatastoreBrowserSearchResults}};
+    for (@{$result->{HostDatastoreBrowserSearchResults}}) {
+        push @pathes, $_->{folderPath}.$_->{file}{path}
+            if defined $_->{folderPath} and defined $_->{file}{path};
+
+    }
     return \@pathes;
 }
 #-------------------------------------------------------------------------------

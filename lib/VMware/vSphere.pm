@@ -1,6 +1,6 @@
 package VMware::vSphere;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 use strict;
 use warnings;
@@ -234,7 +234,10 @@ sub get_properties {
 
     my @add_xml_params = $args{xml_params} ? @{$args{xml_params}} : ();
     my %xml_params = (
-            ForceArray => ['objects', 'propSet', 'childSnapshotList'],
+            ForceArray => [
+                'objects', 'propSet', 'childSnapshotList',
+                'HostDatastoreBrowserSearchResults'
+            ],
             KeyAttr => {
                 childSnapshotList => 'snapshot',
                 propSet => 'name',

@@ -35,7 +35,9 @@ sub new {
 
     # Prepare UserAgent
     my $cookies = HTTP::Cookies->new();
-    my $ssl_opts = {};
+    my $ssl_opts = {
+        SSL_version => 'tlsv1',
+    };
     if (defined $args{ssl_opts}) {
         $ssl_opts = $args{ssl_opts};
     } else {
@@ -43,8 +45,9 @@ sub new {
         $ssl_opts->{SSL_verify_mode} = SSL_VERIFY_NONE;
     }
     $self->{ua} = LWP::UserAgent->new(
-        ssl_opts => $ssl_opts,
+        ssl_opts   => $ssl_opts,
         cookie_jar => $cookies,
+        agent      => 'VMware VI Client/5.0.0',
     ) or croak "Can't initialize LWP::UserAgent";
 
     if ($self->{debug}) {
@@ -239,6 +242,7 @@ sub get_properties {
                 'HostDatastoreBrowserSearchResults'
             ],
             KeyAttr => {
+                VirtualDevice => 'key',
                 childSnapshotList => 'snapshot',
                 propSet => 'name',
             },

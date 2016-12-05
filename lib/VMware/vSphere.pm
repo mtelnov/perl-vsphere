@@ -191,6 +191,8 @@ sub get_properties {
             $object_set = $self->_get_object_set_for_datastore;
         } elsif ($args{of} eq 'ClusterComputeResource') {
             $object_set = $self->_get_object_set_for_cluster;
+        } elsif ($args{of} eq 'ComputeResource') {
+            $object_set = $self->_get_object_set_for_compute_resource;
         } elsif ($args{of} eq 'Datacenter') {
             $object_set = $self->_get_object_set_for_datacenter;
         } elsif ($args{of} eq 'Network') {
@@ -473,6 +475,24 @@ sub _get_object_set_for_datastore {
 }
 
 sub _get_object_set_for_cluster {
+    my $self = shift;
+    return $self->get_object_set(
+        select_sets => [
+            {
+                name => 'folders',
+                path => 'childEntity',
+                select_sets => [ 'folders', 'datacenter' ],
+            },
+            {
+                name => 'datacenter',
+                type => 'Datacenter',
+                path => 'hostFolder',
+                select_sets => [ 'folders' ],
+            },
+        ]);
+}
+
+sub _get_object_set_for_compute_resource {
     my $self = shift;
     return $self->get_object_set(
         select_sets => [

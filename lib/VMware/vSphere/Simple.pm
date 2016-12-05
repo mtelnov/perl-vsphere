@@ -886,10 +886,26 @@ sub create_disk {
 
 Removes a virtual disk from the virtual machine by its ID (C<$key>).
 
+The following options are available:
+
+=over
+
+=item destroy =E<gt> $boolean
+
+Deletes files from disk (enabled by default).
+
+=back
+
 =cut
 
 sub remove_disk {
-    my ($self, $vm_name, $key) = @_;
+    my $self    = shift;
+    my $vm_name = shift;
+    my $key     = shift;
+    my %args    = (
+        destroy => 1,
+        @_
+    );
     croak "vm_name isn't defined" if not defined $vm_name;
     croak "key isn't defined" if not defined $key;
 
@@ -905,7 +921,7 @@ sub remove_disk {
     $w->startTag('spec');
     $w->startTag('deviceChange');
     $w->dataElement(operation => 'remove');
-    $w->dataElement(fileOperation => 'destroy');
+    $w->dataElement(fileOperation => 'destroy') if $args{destroy};
     $w->startTag('device', 'xsi:type' => 'VirtualDisk');
     $w->dataElement(key => $key);
     $w->startTag('deviceInfo');
@@ -1173,7 +1189,7 @@ sub register_vm {
         @_,
     );
     croak "VM name isn't defined" if not defined $vm_name;
-    for (qw{ datacenter cluster host path }) {
+    for (qw{ datacenter host path }) {
         croak "Required parameter '$_' isn't defined" if not defined $args{$_};
     }
 
@@ -1185,11 +1201,18 @@ sub register_vm {
         where => { name => $args{datacenter} },
     );
 
-    # TODO allow to register outside a cluster
-    my $cluster = $self->get_property('resourcePool',
-        of    => 'ClusterComputeResource',
-        where => { name => $args{cluster} },
-    );
+    my $cluster;
+    if (defined $args{cluster}) {
+        $cluster = $self->get_property('resourcePool',
+            of    => 'ClusterComputeResource',
+            where => { name => $args{cluster} },
+        );
+    } else {
+        $cluster = $self->get_property('resourcePool',
+            of    => 'ComputeResource',
+            where => { name => $args{host} },
+        );
+    }
 
     my $host = $self->get_moid($args{host}, 'HostSystem');
 

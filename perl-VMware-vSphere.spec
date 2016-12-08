@@ -5,7 +5,7 @@
 #
 
 Name:    perl-VMware-vSphere
-Version: 1.00
+Version: 1.02
 Release: 0
 %define  cpan_name VMware-vSphere
 Summary:   Pure Perl API and CLI for VMware vSphere
@@ -21,15 +21,11 @@ BuildRequires: perl(Carp)
 BuildRequires: perl(Data::Dumper)
 BuildRequires: perl(ExtUtils::MakeMaker)
 BuildRequires: perl(File::Basename)
-BuildRequires: perl(HTTP::Cookies)
-BuildRequires: perl(HTTP::Request::Common)
-BuildRequires: perl(IO::Socket::SSL)
-BuildRequires: perl(LWP::Protocol::https)
-BuildRequires: perl(LWP::UserAgent)
 BuildRequires: perl(List::Util)
 BuildRequires: perl(Pod::Find)
 BuildRequires: perl(Pod::Usage)
 BuildRequires: perl(Test::More)
+BuildRequires: perl(WWW::Curl::Easy)
 BuildRequires: perl(XML::Simple)
 BuildRequires: perl(XML::Writer)
 Requires: perl
@@ -37,14 +33,10 @@ Requires: perl(base)
 Requires: perl(Carp)
 Requires: perl(Data::Dumper)
 Requires: perl(File::Basename)
-Requires: perl(HTTP::Cookies)
-Requires: perl(HTTP::Request::Common)
-Requires: perl(IO::Socket::SSL)
-Requires: perl(LWP::Protocol::https)
-Requires: perl(LWP::UserAgent)
 Requires: perl(List::Util)
 Requires: perl(Pod::Find)
 Requires: perl(Pod::Usage)
+Requires: perl(WWW::Curl::Easy)
 Requires: perl(XML::Simple)
 Requires: perl(XML::Writer)
 
@@ -85,5 +77,7 @@ find $RPM_BUILD_ROOT -type f -name perllocal.pod -exec rm -f {} ';'
 %doc README LICENSE
 
 %changelog
+* Thu Dec 08 2016 Mikhail Telnov <mikhail.telnov@gmail.com> - 1.02-0
+- Now it uses WWW::Curl::Easy instead of LWP
 * Mon Jun 20 2016 Mikhail Telnov <mikhail.telnov@gmail.com> - 1.00-0
 - Initial package

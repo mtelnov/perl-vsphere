@@ -1,28 +1,25 @@
 package VMware::vSphere;
 
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 use strict;
 use warnings;
 
 use Carp;
 use Data::Dumper;
-use HTTP::Cookies;
-use HTTP::Request::Common;
-use IO::Socket::SSL;
-use LWP::UserAgent;
-use LWP::Protocol::https;
+use WWW::Curl::Easy;
 use XML::Simple;
 use XML::Writer;
 
 sub new {
     my $class = shift;
     my %args = (
-        host       => undef,
-        username   => undef,
-        password   => undef,
-        debug      => 0,
-        ssl_opts   => undef,
+        host           => undef,
+        username       => undef,
+        password       => undef,
+        debug          => 0,
+        ssl_verifyhost => 0,
+        ssl_verifypeer => 0,
         @_
     );
     my $self = {};
@@ -33,33 +30,15 @@ sub new {
     # Enable debug messages
     $self->{debug} = $args{debug} || 0;
 
-    # Prepare UserAgent
-    my $cookies = HTTP::Cookies->new();
-    my $ssl_opts = {
-        SSL_version => 'tlsv1',
-    };
-    if (defined $args{ssl_opts}) {
-        $ssl_opts = $args{ssl_opts};
-    } else {
-        $ssl_opts->{verify_hostname} = 0;
-        $ssl_opts->{SSL_verify_mode} = SSL_VERIFY_NONE;
-    }
-    $self->{ua} = LWP::UserAgent->new(
-        ssl_opts   => $ssl_opts,
-        cookie_jar => $cookies,
-        agent      => 'VMware VI Client/5.0.0',
-    ) or croak "Can't initialize LWP::UserAgent";
+    $self->{curl} = WWW::Curl::Easy->new()
+        or croak "Can't initialize WWW::Curl::Easy.";
 
-    if ($self->{debug}) {
-        $self->{ua}->add_handler("request_send", sub {
-            printf "\n%s\n%s\n%s\n", '='x80, shift->as_string, '='x80;
-            return;
-        });
-        $self->{ua}->add_handler("response_done", sub {
-            printf "\n%s\n%s\n%s\n", '='x80, shift->as_string, '='x80;
-            return;
-        });
-    }
+    $self->{curl}->setopt(CURLOPT_SSL_VERIFYHOST, $args{ssl_verifyhost} ? 2 : 0);
+    $self->{curl}->setopt(CURLOPT_SSL_VERIFYPEER, $args{ssl_verifypeer} ? 1 : 0);
+    $self->{curl}->setopt(CURLOPT_VERBOSE, $self->{debug});
+    $self->{curl}->setopt(CURLOPT_USERAGENT, 'VMware VI Client/5.0.0');
+    $self->{curl}->setopt(CURLOPT_COOKIEJAR, 'cookie.txt');
+    $self->{curl}->setopt(CURLOPT_COOKIEFILE, 'cookie.txt');
 
     bless $self, $class;
     $self->refresh_service;
@@ -74,6 +53,8 @@ sub request {
     croak "Missed object id" if not defined $id;
     croak "Missed method name" if not defined $method;
 
+    my $curl = $self->{curl};
+
     my $request = <<"EOF";
 <?xml version="1.0" encoding="UTF-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
@@ -87,20 +68,33 @@ sub request {
     </soap:Body>
 </soap:Envelope>
 EOF
-    my $response = $self->{ua}->request(
-        POST "https://$self->{host}/sdk/vimService",
-        'Content-Type' => "text/xml; charset=utf-8",
-        SOAPAction => "urn:vim25/5.0",
-        content => $request,
-    );
-    croak "Invalid response from LWP" if not defined $response;
+    $curl->setopt(CURLOPT_POST, 1);
+    $curl->setopt(CURLOPT_HTTPHEADER, [
+        'Content-Type: text/xml; charset=utf-8',
+        'SOAPAction: urn:vim25/5.0',
+    ]);
+    $curl->setopt(CURLOPT_POSTFIELDS, $request);
+    $curl->setopt(CURLOPT_URL, "https://$self->{host}/sdk/vimService");
 
-    return $response->content if $response->code eq '200';
+    my $response;
+    $curl->setopt(CURLOPT_WRITEDATA, \$response);
+    print STDERR "Send request:\n", '-'x80, "\n", $request, "\n", '-'x80, "\n"
+        if $self->{debug};
+    if (my $retcode = $curl->perform) {
+        croak "Can't perform request: $retcode ".
+            $curl->strerror($retcode)." ".$curl->errbuf;
+    }
+    print STDERR "Got response:\n", '-'x80, "\n", $response, "\n", '-'x80, "\n"
+        if $self->{debug} and defined $response;
 
-    croak "Host returned an error: ".$response->status_line
-        if not defined $response->content or $response->content !~ /<[?]xml/;
+    my $http_code = $curl->getinfo(CURLINFO_HTTP_CODE);
+    return $response if $http_code == 200;
 
-    my $xml = XMLin($response->content);
+    croak "Host returned an error: $http_code" if not defined $response;
+    croak "Host returned an error($http_code): $response"
+        if $response !~ /<[?]xml/;
+
+    my $xml = XMLin($response);
 
     if (
         $xml->{'soapenv:Body'}{'soapenv:Fault'}{detail}{NotAuthenticatedFault}
@@ -117,8 +111,8 @@ EOF
     croak "Request failed: $faultstring"
         if defined $faultstring and not ref $faultstring;
     croak "Host returned an error: $1"
-        if $response->content =~ /<soapenv:Fault>(.*)<\/soapenv:Fault>/is;
-    croak "Host returned an error: ".$response->content;
+        if $response =~ /<soapenv:Fault>(.*)<\/soapenv:Fault>/is;
+    croak "Host returned an error: ".$response;
 }
 
 sub get_object_set {
@@ -398,6 +392,7 @@ sub DESTROY {
             Logout         => undef,
             2
         );
+        $self->{curl}->setopt(CURLOPT_COOKIELIST, 'ALL');
     }
     return 1;
 }
@@ -575,17 +570,16 @@ module has following advantages:
 
 =item *
 
-It's a pure perl module (VMware SDK has binaries and python (OMG!) in the
-latest distributive).
+It's small and easy to use.
 
 =item *
 
-It has minumal dependencies on non-core modules. Actually it needs L<LWP>,
-L<IO::Socket::SSL>, L<XML::Simple> and L<XML::Writer> modules only.
+It has minumal dependencies on non-core modules. Actually it needs 
+L<WWW::Curl::Easy>, L<XML::Simple> and L<XML::Writer> modules only.
 
 =item *
 
-High performance: it requests only what's actually needed.
+High performance: it uses libcurl and requests only what's actually needed.
 
 =back
 
@@ -625,12 +619,44 @@ The following arguments are optional:
 
 Debug information will be printed to the C<STDERR> if this parameter is true.
 
-=item ssl_opts =E<gt> \%ssl_opts
+=item ssl_verifyhost =E<gt> $boolean
 
-Pass additional SSL options to the L<IO::Socket::SSL> used for connection.
-By default it disables any certificate checks:
+This option determines whether libcurl verifies that the server cert is for the 
+server it is known as. When negotiating TLS and SSL connections, the server 
+sends a certificate indicating its identity. If enabled that certificate must 
+indicate that the server is the server to which you meant to connect, or the 
+connection fails. Simply put, it means it has to have the same name in the 
+certificate as is in the URL you operate against. (disabled by default)
 
-{ verify_hostname =E<gt> 0, SSL_verify_mode =E<gt>SSL_VERIFY_NONE }
+=item ssl_verifypeer =E<gt> $boolean
+
+This option determines whether curl verifies the authenticity of the peer's
+certificate. A value of 1 means curl verifies; 0 (zero) means it doesn't.
+
+When negotiating a TLS or SSL connection, the server sends a certificate 
+indicating its identity. Curl verifies whether the certificate is authentic, 
+i.e. that you can trust that the server is who the certificate says it is. This
+trust is based on a chain of digital signatures, rooted in certification 
+authority (CA) certificates you supply. curl uses a default bundle of CA 
+certificates (the path for that is determined at build time).
+
+When enabled, and the verification fails to prove that the certificate is 
+authentic, the connection fails. When the option is zero, the peer certificate
+verification succeeds regardless.
+
+Authenticating the certificate is not enough to be sure about the server. You 
+typically also want to ensure that the server is the server you mean to be 
+talking to. Use C<ssl_verifyhost> for that. The check that the host name in the 
+certificate is valid for the host name you're connecting to is done 
+independently of the C<ssl_verifyhost> option.
+
+WARNING: disabling verification of the certificate allows bad guys to 
+man-in-the-middle the communication without you knowing it. Disabling 
+verification makes the communication insecure. Just having encryption on a 
+transfer is not enough as you cannot be sure that you are communicating with 
+the correct end-point.
+
+(disabled by default)
 
 =back
 

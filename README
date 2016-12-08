@@ -3,18 +3,17 @@
   WHAT IS IT?
   -----------
 
-VMware::vSphere is a pure perl interface to VMware vSphere Web Services
+VMware::vSphere is a perl interface to VMware vSphere Web Services
 (management interface for VMware vCenter and VMware ESXi products).
 It is not a full-featured replacement for VMware vSphere Perl SDK but this
 module has following advantages:
 
-  * It's a pure perl module (VMware SDK has binaries and python (OMG!) in the
-    latest distributive).
+  * It's small and easy to use.
 
-  * It has minumal dependencies on non-core modules. Actually it needs LWP,
-    IO::Socket::SSL, XML::Simple and XML::Writer modules only.
+  * It has minumal dependencies on non-core modules. Actually it needs
+    WWW::Curl::Easy, XML::Simple and XML::Writer modules only.
 
-  * High performance: it requests only what's actually needed.
+  * High performance: it uses libcurl and requests only what's actually needed.
 
 The distribution includes:
 

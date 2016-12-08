@@ -3,11 +3,11 @@
 Perl API and command line utility to manage VMware ESXi/vCenter (VMware vSphere Web Services).
 It is not a full-featured replacement for [VMware vSphere Perl SDK](https://www.vmware.com/support/developer/viperltoolkit/index.html) but this module has following advantages:
 
-* Platform independed pure Perl code (VMware SDK has binaries and python (OMG!) in the latest distributive).
+* It's small and easy to use.
 
-* Easy to install: it has minumal dependencies on non-core modules. Actually it requires LWP, IO::Socket::SSL, XML::Simple and XML::Writer modules only.
+* Easy to install: it has minumal dependencies on non-core modules. Actually it requires WWW::Curl::Easy, XML::Simple and XML::Writer modules only.
 
-* High performance: it requests only what's actually needed.
+* High performance: it uses libcurl requests only what's actually needed.
 
 * CLI with shell completion.
 

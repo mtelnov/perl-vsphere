@@ -118,6 +118,11 @@ sub completion {
             return 1;
         }
 
+        if ($m eq 'add_portgroup' or $m eq 'remove_portgroup') {
+            eval { print { $self->{stdout} } vsphere()->list('HostSystem'); };
+            return 1;
+        }
+
         if (defined first { $_ eq $m } qw{
             get_vm_path get_vm_powerstate tools_is_running poweron_vm
             poweroff_vm shutdown_vm reboot_vm list_snapshots create_snapshot
@@ -136,6 +141,42 @@ sub completion {
     if ($i == 3) {
         if ($m eq 'get_moid' or $m eq 'delete') {
             print { $self->{stdout} } VMware::vSphere::Const::MO_TYPES;
+            return 1;
+        }
+
+        if ($m eq 'add_portgroup') {
+            eval {
+                my $v = vsphere();
+                my $network_system = $v->get_property(
+                    'configManager.networkSystem',
+                    of    => 'HostSystem',
+                    where => { name => $prev },
+                );
+                my $vswitches = $v->get_property('networkInfo.vswitch',
+                    of   => 'HostNetworkSystem',
+                    moid => $network_system,
+                );
+                print { $self->{stdout} }
+                    map { $_->{name} } @{$vswitches->{HostVirtualSwitch}};
+            };
+            return 1;
+        }
+
+        if ($m eq 'remove_portgroup') {
+            eval {
+                my $v = vsphere();
+                my $network_system = $v->get_property(
+                    'configManager.networkSystem',
+                    of    => 'HostSystem',
+                    where => { name => $prev },
+                );
+                my $pg = $v->get_property('networkInfo.portgroup',
+                    of   => 'HostNetworkSystem',
+                    moid => $network_system,
+                );
+                print { $self->{stdout} }
+                    map { $_->{spec}{name} } @{$pg->{HostPortGroup}};
+            };
             return 1;
         }
     }

@@ -1461,6 +1461,129 @@ sub list_vm_processes {
 }
 #-------------------------------------------------------------------------------
 
+=head2 add_portgroup
+
+    $v->add_portgroup($host, $vswitch, $portgroup)
+    $v->add_portgroup($host, $vswitch, $portgroup, $vlan)
+
+Adds a port group to the virtual switch.
+
+Required parameters:
+
+=over
+
+=item $host
+
+Host name
+
+=item $vswitch
+
+Name of the virtual switch.
+
+=item $portgroup
+
+Name for the port group.
+
+=back
+
+Optional parameters:
+
+=over
+
+=item $vlan
+
+The VLAN ID for ports using this port group. Possible values:
+
+=over
+
+=item *
+
+A value of 0 specifies that you do not want the port group associated with a 
+VLAN (by default).
+
+=item *
+
+A value from 1 to 4094 specifies a VLAN ID for the port group.
+
+=item *
+
+A value of 4095 specifies that the port group should use trunk mode, which 
+allows the guest operating system to manage its own VLAN tags.
+
+=back
+
+=back
+
+=cut
+
+sub add_portgroup {
+    my ($self, $host, $vswitch, $portgroup, $vlan) = @_;
+    $vlan ||= 0;
+
+    my $network_system = $self->get_property('configManager.networkSystem',
+        of    => 'HostSystem',
+        where => { name => $host },
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec);
+    $w->startTag('portgrp');
+    $w->dataElement(name => $portgroup);
+    $w->dataElement(vlanId => $vlan);
+    $w->dataElement(vswitchName => $vswitch);
+    $w->emptyTag('policy');
+    $w->endTag('portgrp');
+    $w->end;
+
+    $self->request(
+        HostNetworkSystem => $network_system,
+        AddPortGroup => $spec,
+    );
+    return 1;
+}
+#-------------------------------------------------------------------------------
+
+=head2 remove_portgroup
+
+    $v->remove_portgroup($host, $portgroup)
+
+Removes port group from the virtual switch.
+
+Required parameters:
+
+=over
+
+=item $host
+
+Host name
+
+=item $portgroup
+
+Name for the port group.
+
+=back
+
+=cut
+
+sub remove_portgroup {
+    my ($self, $host, $portgroup) = @_;
+
+    my $network_system = $self->get_property('configManager.networkSystem',
+        of    => 'HostSystem',
+        where => { name => $host },
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(pgName => $portgroup);
+    $w->end;
+
+    $self->request(
+        HostNetworkSystem => $network_system,
+        RemovePortGroup => $spec,
+    );
+    return 1;
+}
+#-------------------------------------------------------------------------------
+
 1;
 
 __END__

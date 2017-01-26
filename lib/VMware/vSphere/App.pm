@@ -7,6 +7,8 @@ use warnings;
 
 use Carp;
 use Data::Dumper;
+use File::Spec::Functions qw{ catfile catdir };
+use File::Path qw{ make_path };
 use File::Basename qw{ basename };
 use List::Util qw{ first };
 use Pod::Find qw{ pod_where };
@@ -279,11 +281,16 @@ sub vsphere {
             if not defined $ENV{$_};
     }
 
+    my $cookies_dir = catdir($ENV{HOME}, '.cache', 'vsphere');
+    make_path($cookies_dir, { chmod => 0700 }) unless -d $cookies_dir;
+
     return VMware::vSphere::Simple->new(
         host => $ENV{VSPHERE_HOST},
         username => $ENV{VSPHERE_USER},
         password => $ENV{VSPHERE_PASS},
         debug => $ENV{VSPHERE_DEBUG},
+        cookies_file => catfile($cookies_dir, '.vsphere_cookies'),
+        save_cookies => 1,
     );
 }
 

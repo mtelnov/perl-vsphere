@@ -20,6 +20,8 @@ sub new {
         debug          => 0,
         ssl_verifyhost => 0,
         ssl_verifypeer => 0,
+        cookies_file   => 'cookie.txt',
+        save_cookies   => 0,
         @_
     );
     my $self = {};
@@ -29,6 +31,7 @@ sub new {
     }
     # Enable debug messages
     $self->{debug} = $args{debug} || 0;
+    $self->{save_cookies} = $args{save_cookies} ? 1 : 0;
 
     $self->{curl} = WWW::Curl::Easy->new()
         or croak "Can't initialize WWW::Curl::Easy.";
@@ -37,8 +40,8 @@ sub new {
     $self->{curl}->setopt(CURLOPT_SSL_VERIFYPEER, $args{ssl_verifypeer} ? 1 : 0);
     $self->{curl}->setopt(CURLOPT_VERBOSE, $self->{debug});
     $self->{curl}->setopt(CURLOPT_USERAGENT, 'VMware VI Client/5.0.0');
-    $self->{curl}->setopt(CURLOPT_COOKIEJAR, 'cookie.txt');
-    $self->{curl}->setopt(CURLOPT_COOKIEFILE, 'cookie.txt');
+    $self->{curl}->setopt(CURLOPT_COOKIEJAR, $args{cookies_file});
+    $self->{curl}->setopt(CURLOPT_COOKIEFILE, $args{cookies_file});
 
     bless $self, $class;
     $self->refresh_service;
@@ -366,6 +369,12 @@ sub refresh_service {
 
 sub login {
     my $self = shift;
+    my $sm = $self->get_properties(
+        of => 'SessionManager', moid => $self->{service}{sessionManager},
+    );
+    if (defined $sm->{SessionManager}{currentSession}) {
+        return $sm->{SessionManager}{currentSession};
+    }
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
     $w->dataElement(userName => $self->{username});
     $w->dataElement(password => $self->{password});
@@ -390,7 +399,9 @@ sub debug {
 
 sub DESTROY {
     my $self = shift;
-    if (defined $self and defined $self->{UserSession}) {
+    if (defined $self and defined $self->{UserSession}
+            and not $self->{save_cookies}
+    ) {
         $self->request(
             SessionManager => $self->{service}{sessionManager},
             Logout         => undef,

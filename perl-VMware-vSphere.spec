@@ -6,7 +6,7 @@
 
 Name:    perl-VMware-vSphere
 Version: 1.02
-Release: 0
+Release: 1
 %define  cpan_name VMware-vSphere
 Summary:   Pure Perl API and CLI for VMware vSphere
 License:   Artistic-1.0 or GPL-1.0+
@@ -25,7 +25,7 @@ BuildRequires: perl(List::Util)
 BuildRequires: perl(Pod::Find)
 BuildRequires: perl(Pod::Usage)
 BuildRequires: perl(Test::More)
-BuildRequires: perl(WWW::Curl::Easy)
+BuildRequires: perl(WWW::Curl)
 BuildRequires: perl(XML::Simple)
 BuildRequires: perl(XML::Writer)
 Requires: perl
@@ -36,7 +36,7 @@ Requires: perl(File::Basename)
 Requires: perl(List::Util)
 Requires: perl(Pod::Find)
 Requires: perl(Pod::Usage)
-Requires: perl(WWW::Curl::Easy)
+Requires: perl(WWW::Curl)
 Requires: perl(XML::Simple)
 Requires: perl(XML::Writer)
 
@@ -77,6 +77,8 @@ find $RPM_BUILD_ROOT -type f -name perllocal.pod -exec rm -f {} ';'
 %doc README LICENSE
 
 %changelog
+* Wed Jan 18 2017 Mikhail Telnov <mikhail.telnov@gmail.com> - 1.02-1
+- WWW::Curl::Easy replaced with WWW::Curl for RHEL compatibility
 * Thu Dec 08 2016 Mikhail Telnov <mikhail.telnov@gmail.com> - 1.02-0
 - Now it uses WWW::Curl::Easy instead of LWP
 * Mon Jun 20 2016 Mikhail Telnov <mikhail.telnov@gmail.com> - 1.00-0

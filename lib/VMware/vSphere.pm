@@ -168,6 +168,8 @@ sub get_properties {
         object_set  => undef,
         properties  => undef,
         max_objects => undef,
+        force_array => [],
+        key_attr    => {},
         xml_params  => undef,
         @_
     );
@@ -235,12 +237,14 @@ sub get_properties {
     my %xml_params = (
             ForceArray => [
                 'objects', 'propSet', 'childSnapshotList',
-                'HostDatastoreBrowserSearchResults'
+                'HostDatastoreBrowserSearchResults',
+                @{$args{force_array}},
             ],
             KeyAttr => {
                 VirtualDevice => 'key',
                 childSnapshotList => 'snapshot',
                 propSet => 'name',
+                %{$args{key_attr}},
             },
             @add_xml_params,
     );
@@ -730,6 +734,15 @@ suspend the retrieval when the count of objects reaches the specified maximum.
 PropertyCollector policy may still limit the count to something less than
 maxObjects. Any remaining objects may be retrieved with
 ContinueRetrievePropertiesEx. A value less than or equal to 0 is illegal.
+
+=item force_array =E<gt> \@tag_names
+
+Allows you to specify a list of element names which should always be forced into
+an array representation.
+
+=item key_attr =E<gt> \%tags_and_keys
+
+Specifies additional key properties.
 
 =item xml_params =E<gt> \%xml_params
 

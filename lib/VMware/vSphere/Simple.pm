@@ -1231,6 +1231,33 @@ sub register_vm {
 }
 #-------------------------------------------------------------------------------
 
+=head2 unregister_vm
+
+    $v->unregister_vm($vm_name)
+
+Removes this virtual machine from the inventory without removing any of the
+virtual machine's files on disk. All high-level information stored with the
+management server (ESX Server or VirtualCenter) is removed, including
+information such as statistics, resource pool association, permissions, and
+alarms.
+
+=cut
+
+sub unregister_vm {
+    my ($self, $vm_name) = @_;
+    croak "VM name isn't defined" if not defined $vm_name;
+
+    print STDERR "Unregister the VM $vm_name\n"
+        if $self->debug;
+
+    $self->request(
+        VirtualMachine => $self->get_moid($vm_name),
+        'UnregisterVM'
+    );
+    return 1;
+}
+#-------------------------------------------------------------------------------
+
 =head2 mount_tools_installer
 
     $v->mount_tools_installer($vm_name)
@@ -1248,6 +1275,99 @@ sub mount_tools_installer {
         'MountToolsInstaller'
     );
     return 1;
+}
+#-------------------------------------------------------------------------------
+
+=head2 clone
+
+    $v->clone($vm_name, $clone_name, %parameters)
+
+Creates a clone of this virtual machine. If the virtual machine is used as a
+template, this method corresponds to the deploy command.
+
+Optional parameters:
+
+=over
+
+=item datastore =E<gt> $datastore_name
+
+Name of the target datastore.
+
+=back
+
+=item folder =E<gt> $folder_moid
+
+MOID of the destination folder.
+
+=back
+
+=cut
+
+sub clone {
+    my $self       = shift;
+    my $vm_name    = shift;
+    my $clone_name = shift;
+    my %args = (
+        datastore => undef,
+        folder    => undef,
+        @_,
+    );
+
+    print STDERR "Clone '$vm_name' as '$clone_name'.\n"
+        if $self->debug;
+
+    my $p = $self->get_properties(
+        properties => [qw{
+            parent parentVApp datastore
+        }],
+        where => { name => $vm_name },
+    );
+
+    my $vm_id = (keys %$p)[0]
+        or croak "Can't get info for VM '$vm_name'";
+
+    my $datastore;
+    if (defined $args{datastore}) {
+        $datastore = $self->get_moid($args{datastore}, 'Datastore');
+    } else {
+        $datastore = $p->{$vm_id}{datastore}{ManagedObjectReference}
+            or croak "Can't get datastore of the VM '$vm_name'";
+        croak "VM '$vm_name' located at more than one datastore, ".
+              "please specify 'datastore' option"
+            if ref $datastore;
+    }
+
+    my $parent = $args{folder};
+    if (not defined $parent) {
+        $parent = $p->{$vm_id}{parent};
+        if (defined $p->{$vm_id}{parentVApp}) {
+            $parent = $self->get_property('parentFolder',
+                of => 'VirtualApp',
+                moid => $p->{$vm_id}{parentVApp},
+            );
+        }
+        croak "Can't get parent folder for VM '$vm_name'"
+            if not defined $parent;
+    }
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(folder => $parent, type => 'Folder');
+    $w->dataElement(name => $clone_name);
+    $w->startTag('spec');
+    $w->startTag('location');
+    $w->dataElement(datastore => $datastore, type => 'Datastore');
+    $w->endTag('location');
+    $w->dataElement(template => 0);
+    $w->dataElement(powerOn => 0);
+# TODO
+#    $w->dataElement(snapshot => $snapshot, type => 'VirtualMachineSnapshot');
+    $w->endTag('spec');
+    $w->end;
+
+    return $self->run_task(
+        VirtualMachine => $vm_id,
+        CloneVM_Task   => $spec,
+    );
 }
 #-------------------------------------------------------------------------------
 

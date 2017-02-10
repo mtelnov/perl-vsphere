@@ -1704,6 +1704,69 @@ sub remove_portgroup {
 }
 #-------------------------------------------------------------------------------
 
+=head2 change_esxi_settings
+
+    $v->change_esxi_settings($host, %settings)
+
+Updates advanced settings of the host.
+
+Required parameters:
+
+=over
+
+=item $host
+
+Host name
+
+=item %settings
+
+Pairs with key and value of settings.
+
+=back
+
+=cut
+
+sub change_esxi_settings {
+    my $self = shift;
+    my $host = shift;
+    my %settings = @_;
+
+    my $option_manager = $self->get_property('configManager.advancedOption',
+        of    => 'HostSystem',
+        where => { name => $host },
+    );
+
+    my $supported = $self->get_property('supportedOption',
+        of        => 'OptionManager',
+        moid      => $option_manager,
+        keep_type => 1,
+        key_attr  => { OptionDef => 'key' },
+    );
+    $supported = $supported->{OptionDef};
+    my %types;
+    for (keys %settings) {
+        croak "'$_' is unknown option" if not exists $supported->{$_};
+        $types{$_} = $supported->{$_}{optionType}{'xsi:type'};
+        $types{$_} =~ s/option//i;
+    }
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    foreach my $key (keys %settings) {
+        $w->startTag('changedValue');
+        $w->dataElement(key => $key);
+        $w->dataElement(value => $settings{$key}, 'xsi:type' => $types{$key});
+        $w->endTag('changedValue');
+    }
+    $w->end;
+
+    $self->request(
+        OptionManager => $option_manager,
+        UpdateOptions => $spec,
+    );
+    return 1;
+}
+#-------------------------------------------------------------------------------
+
 1;
 
 __END__

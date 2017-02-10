@@ -120,11 +120,16 @@ sub completion {
             return 1;
         }
 
-        if ($m eq 'add_portgroup' or $m eq 'remove_portgroup') {
+        # First argument is host
+        if (defined first { $_ eq $m } qw{
+            add_portgroup remove_portgroup change_esxi_settings
+            }
+        ) {
             eval { print { $self->{stdout} } vsphere()->list('HostSystem'); };
             return 1;
         }
 
+        # First argument is VM
         if (defined first { $_ eq $m } qw{
             get_vm_path get_vm_powerstate tools_is_running poweron_vm
             poweroff_vm shutdown_vm reboot_vm list_snapshots create_snapshot

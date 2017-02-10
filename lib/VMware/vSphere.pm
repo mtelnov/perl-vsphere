@@ -174,6 +174,7 @@ sub get_properties {
         force_array => [],
         key_attr    => {},
         xml_params  => undef,
+        keep_type   => 0,
         @_
     );
 
@@ -253,17 +254,22 @@ sub get_properties {
     );
     while (1) {
         # Strip root tags
-        $response =~ s/.*<soapenv:Body>\s*<\w+Response[^>]*>\s*//s;
-        $response =~ s{\s*</\w+Response>\s*</soapenv:Body>.*}{}s;
+#        $response =~ s/.*<soapenv:Body>\s*<\w+Response[^>]*>\s*//s;
+#        $response =~ s{\s*</\w+Response>\s*</soapenv:Body>.*}{}s;
         # Strip type attributes from tags
-        $response =~ s/<(\w+)(?: (?:\w+\:)?type="[^"]+")+>/<$1>/gs;
+        if (not $args{keep_type}) {
+            $response =~ s/<(\w+)(?: (?:\w+\:)?type="[^"]+")+>/<$1>/gs;
+        }
         if ($response eq '') {
             print STDERR "Empty response\n" if $self->debug;
             last;
         }
         my $xml = XMLin($response, %xml_params);
         print Data::Dumper->Dump([$xml], ['xml']) if $self->debug;
-        my $o = $xml->{objects};
+        my $o = $xml;
+        $o = $o->{(grep(/body/i, keys %$o))[0]};
+        $o = $o->{(grep(/response/i, keys %$o))[0]};
+        $o = $o->{returnval}{objects};
         croak "Invalid response: $response"
             if not defined $o or not ref $o or ref $o ne 'ARRAY';
         my %r = map { $_->{obj} => $_->{propSet} } @$o;

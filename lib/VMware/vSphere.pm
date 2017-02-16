@@ -22,6 +22,7 @@ sub new {
         ssl_verifypeer => 0,
         cookies_file   => 'cookie.txt',
         save_cookies   => 0,
+        ipv6           => 0,
         @_
     );
     my $self = {};
@@ -42,6 +43,8 @@ sub new {
     $self->{curl}->setopt(CURLOPT_USERAGENT, 'VMware VI Client/5.0.0');
     $self->{curl}->setopt(CURLOPT_COOKIEJAR, $args{cookies_file});
     $self->{curl}->setopt(CURLOPT_COOKIEFILE, $args{cookies_file});
+    $self->{curl}->setopt(CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4)
+        unless $args{ipv6};
 
     bless $self, $class;
     $self->refresh_service;
@@ -677,6 +680,11 @@ verification makes the communication insecure. Just having encryption on a
 transfer is not enough as you cannot be sure that you are communicating with 
 the correct end-point.
 
+(disabled by default)
+
+=item ipv6 =E<gt> $boolean
+
+Enables IPv6 DNS queries to allow resolve hostnames to IPv6 addresss too.
 (disabled by default)
 
 =back

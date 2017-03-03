@@ -273,8 +273,9 @@ sub get_properties {
         $o = $o->{(grep(/body/i, keys %$o))[0]};
         $o = $o->{(grep(/response/i, keys %$o))[0]};
         $o = $o->{returnval}{objects};
+        last if not defined $o;
         croak "Invalid response: $response"
-            if not defined $o or not ref $o or ref $o ne 'ARRAY';
+            if not ref $o or ref $o ne 'ARRAY';
         my %r = map { $_->{obj} => $_->{propSet} } @$o;
         foreach my $obj (keys %r) {
             $result{$obj}{$_} = $r{$obj}{$_}{val} for keys %{$r{$obj}};
@@ -300,7 +301,6 @@ sub get_properties {
         }
     }
 
-    croak "Can't find a managed object" unless %result;
     return \%result;
 }
 

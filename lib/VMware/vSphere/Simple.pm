@@ -107,6 +107,36 @@ sub get_moid {
 }
 #-------------------------------------------------------------------------------
 
+=head2 reload {
+
+    $v->reload($name)
+    $v->reload($name, $mo_type)
+
+Reload the entity state. Clients only need to call this method if they changed
+some external state that affects the service without using the Web service
+interface to perform the change. For example, hand-editing a virtual machine
+configuration file affects the configuration of the associated virtual machine
+but the service managing the virtual machine might not monitor the file for
+changes. In this case, after such an edit, a client would call "reload" on the
+associated virtual machine to ensure the service and its clients have current
+data for the virtual machine.
+C<$mo_type> is 'VirtualMachine' by default.
+
+=cut
+
+sub reload {
+    my ($self, $name, $type) = @_;
+    croak "Name of the managed object isn't defined" if not defined $name;
+    $type ||= 'VirtualMachine';
+
+    $self->request(
+        $type => $self->get_moid($name, $type),
+        'Reload'
+    );
+    return 1;
+}
+#-------------------------------------------------------------------------------
+
 =head2 get_vm_path
 
     $path = $v->get_vm_path($vm_name)

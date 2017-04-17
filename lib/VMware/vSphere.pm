@@ -272,6 +272,7 @@ sub get_properties {
         my $o = $xml;
         $o = $o->{(grep(/body/i, keys %$o))[0]};
         $o = $o->{(grep(/response/i, keys %$o))[0]};
+        my $token = $o->{returnval}{token};
         $o = $o->{returnval}{objects};
         last if not defined $o;
         croak "Invalid response: $response"
@@ -281,7 +282,7 @@ sub get_properties {
             $result{$obj}{$_} = $r{$obj}{$_}{val} for keys %{$r{$obj}};
         }
 
-        my $token = $xml->{token} // last;
+        last if not defined $token;
 
         $response = $self->request(
             PropertyCollector => $self->{service}{propertyCollector},

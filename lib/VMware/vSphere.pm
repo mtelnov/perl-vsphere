@@ -379,11 +379,12 @@ sub refresh_service {
 
 sub login {
     my $self = shift;
+    my $sm_moid = $self->{service}{sessionManager};
     my $sm = $self->get_properties(
-        of => 'SessionManager', moid => $self->{service}{sessionManager},
+        of => 'SessionManager', moid => $sm_moid,
     );
-    if (defined $sm->{SessionManager}{currentSession}) {
-        return $sm->{SessionManager}{currentSession};
+    if (defined $sm->{$sm_moid}{currentSession}) {
+        return $sm->{$sm_moid}{currentSession};
     }
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
     $w->dataElement(userName => $self->{username});

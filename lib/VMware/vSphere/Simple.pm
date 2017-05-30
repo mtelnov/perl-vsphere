@@ -38,9 +38,39 @@ if you didn't read this yet.
 
 =head1 METHODS
 
-This module inherits the constructor and methods from L<VMware::vSphere>.
+This module inherits all methods from L<VMware::vSphere>.
 
 =cut
+
+=head2 new
+
+    $v = VMware::vSphere::Simple(
+        host     => 'vc.example.com',
+        username => 'Administrator@vsphere.local',
+        password => 'secret',
+    )
+
+The constructor extends L<VMware::vSphere/new> with followin options:
+
+=over
+
+=item disable_name_cache =E<gt> $boolean
+
+By default VMware::vSphere::Simple resolves name to the moid only once and then
+uses the cached value. This option disables this cache.
+
+=back
+
+=cut
+
+sub new {
+    my $class = shift;
+    my %args = @_;
+    my $self = $class->SUPER::new(%args);
+    $self->{disable_name_cache} = 1 if $args{disable_name_cache};
+    return $self;
+}
+#-------------------------------------------------------------------------------
 
 =head2 list
 
@@ -97,13 +127,33 @@ sub get_moid {
     my ($self, $name, $type) = @_;
     croak "Name of the managed object isn't defined" if not defined $name;
     $type ||= 'VirtualMachine';
+    return $self->{name_cache}{$type}{$name}
+        if defined $self->{name_cache}{$type}{$name};
 
     my $p = $self->get_properties(
         of         => $type,
         where      => { name => $name },
         properties => [ 'name' ],
     );
-    return (keys %$p)[0];
+    my $moid = (keys %$p)[0];
+    $self->{name_cache}{$type}{$name} = $moid;
+    return $moid;
+}
+#-------------------------------------------------------------------------------
+
+=head2 clear_name_cache
+
+    $v->clear_name_cache
+
+Resets the local cache with MOIDs and object's names. It's required if you need
+to access a newly created object with name as deleted one.
+
+=cut
+
+sub clear_name_cache {
+    my ($self) = @_;
+    $self->{name_cache} = {};
+    return 1;
 }
 #-------------------------------------------------------------------------------
 

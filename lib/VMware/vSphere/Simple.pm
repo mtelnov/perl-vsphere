@@ -844,7 +844,7 @@ Controller ID (1000 by default).
 
 =item unit =E<gt> $unit_number
 
-Unit number (1 by default).
+Unit number. It will be set to the first spare unit number if not specified.
 
 =item mode =E<gt> $disk_mode
 
@@ -890,7 +890,7 @@ sub add_disk {
         size       => undef, # in KB
         thin       => 1,     # enable Thin Provisioning
         controller => 1000,  # controller ID
-        unit       => 1,     # unit number
+        unit       => undef, # unit number
         file       => undef, # path to existent disk file
         mode       => 'persistent', # disk mode
         @_,
@@ -911,6 +911,23 @@ sub add_disk {
                      "$args{size}KB\n" if $self->debug;
     }
     $args{size} ||= '';
+
+    my $moid = $self->get_moid($vm_name);
+    my $controller = $args{controller};
+    my $unit = $args{unit};
+    if (not defined $unit) {
+        my $p = $self->get_property(
+            'config.hardware.device', moid => $moid, force_array => ['device']
+        );
+        $p = $p->{VirtualDevice};
+        my $devices = $p->{$controller}{device};
+        $unit = 0;
+        if (defined ref $devices and ref $devices eq 'ARRAY') {
+            my %used_units = map { $p->{$_}{unitNumber} => 1 } @$devices;
+            $used_units{$p->{$controller}{scsiCtlrUnitNumber}} = 1;
+            $unit++ while exists $used_units{$unit};
+        }
+    }
 
     my $w = XML::Writer->new(OUTPUT => \my $spec);
     $w->startTag('spec');
@@ -934,15 +951,15 @@ sub add_disk {
     $w->dataElement(allowGuestControl => 'false');
     $w->dataElement(connected => 'true');
     $w->endTag('connectable');
-    $w->dataElement(controllerKey => $args{controller});
-    $w->dataElement(unitNumber => $args{unit});
+    $w->dataElement(controllerKey => $controller);
+    $w->dataElement(unitNumber => $unit);
     $w->dataElement(capacityInKB => $args{size});
     $w->endTag('device');
     $w->endTag('deviceChange');
     $w->endTag('spec');
     $w->end;
     $self->run_task(
-        VirtualMachine => $self->get_moid($vm_name),
+        VirtualMachine => $moid,
         ReconfigVM_Task => $spec
     );
     return 1;

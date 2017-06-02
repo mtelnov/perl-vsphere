@@ -6,6 +6,8 @@ use strict;
 use warnings;
 
 use Carp;
+use Net::SSLeay qw{ get_https3 };
+use URI::Escape;
 use XML::Simple;
 use XML::Writer;
 
@@ -1859,6 +1861,288 @@ sub change_esxi_settings {
     $self->request(
         OptionManager => $option_manager,
         UpdateOptions => $spec,
+    );
+    return 1;
+}
+#-------------------------------------------------------------------------------
+
+=head2 create_datacenter
+
+    $v->create_datacenter($name)
+
+Creates a new datacenter with the given name and returns its MOID.
+
+=cut
+
+sub create_datacenter {
+    my ($self, $name) = @_;
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(name => uri_escape($name));
+    $w->end;
+
+    my $response = $self->request(
+        Folder => $self->{service}{rootFolder},
+        CreateDatacenter => $spec,
+    );
+    croak "Wrong response from the server: $response"
+        if $response !~ /<returnval type="Datacenter">([^<]+)<\/returnval>/;
+    return $1;
+}
+#-------------------------------------------------------------------------------
+
+=head2 create_cluster
+
+    $v->create_cluster($cluster_name, %parameters)
+
+Creates a new cluster returns its MOID.
+
+Required parameters:
+
+=over
+
+=item datacenter =E<gt> $datacenter
+
+Name of the target datacenter.
+
+=back
+
+Optional parameters:
+
+=over
+
+=item ha =E<gt> $boolean
+
+Flag to indicate whether or not vSphere HA feature is enabled.
+
+=item ha_vm_monitoring =E<gt> $ha_vm_monitoring
+
+Level of HA Virtual Machine Health Monitoring Service. You can monitor both
+guest and application heartbeats, guest heartbeats only, or you can disable
+the service. Available values: C<vmAndAppMonitoring>, C<vmMonitoringOnly>,
+C<vmMonitoringDisabled> (default).
+
+=item ha_host_monitoring =E<gt> $boolean
+
+Determines whether HA restarts virtual machines after a host fails.
+The default value is true.
+
+=item drs =E<gt> $boolean
+
+Flag indicating whether or not the DRS service is enabled.
+
+=item drs_default =E<gt> $drs_default
+
+Specifies the cluster-wide default DRS behavior for virtual machines.
+Available values: C<fullyAutomated> (default), C<manual>, C<partiallyAutomated>.
+
+=item drs_rate =E<gt> $drs_rate
+
+Threshold for generated ClusterRecommendations. DRS generates only those
+recommendations that are above the specified vmotionRate. Ratings vary from 1
+to 5 (3 by default). This setting applies to manual, partiallyAutomated, and
+fullyAutomated DRS clusters.
+
+=item dpm =E<gt> $boolean
+
+Flag indicating whether or not the DPM service is enabled. This service can
+not be enabled, unless DRS is enabled as well.
+
+=item dpm_rate =E<gt> $dpm_rate
+
+DPM generates only those recommendations that are above the specified rating.
+Ratings vary from 1 to 5 (3 by default). This setting applies to both manual
+and automated DPM clusters.
+
+=back
+
+=cut
+
+sub create_cluster {
+    my $self = shift;
+    my $cluster_name = shift;
+    my %args = (
+        datacenter         => undef,
+        ha                 => 0,
+        ha_vm_monitoring   => 'vmMonitoringDisabled',
+        ha_host_monitoring => 1,
+        drs                => 0,
+        drs_default        => 'fullyAutomated',
+        drs_rate           => 3,
+        dpm                => 0,
+        dpm_rate           => 3,
+        @_,
+    );
+    croak "Cluster name isn't defined" if not defined $cluster_name;
+    for (qw{ datacenter }) {
+        croak "Required parameter '$_' isn't defined" if not defined $args{$_};
+    }
+
+    my $datacenter = $self->get_property('hostFolder',
+        of    => 'Datacenter',
+        where => { name => $args{datacenter} },
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(name => $cluster_name);
+    $w->startTag('spec');
+    $w->dataElement(vmSwapPlacement => 'vmDirectory');
+    $w->startTag('dasConfig');
+    $w->dataElement(enabled => $args{ha} ? 'true' : 'false');
+    $w->dataElement(vmMonitoring => $args{ha_vm_monitoring});
+    $w->dataElement(
+        hostMonitoring => $args{ha_host_monitoring} ? 'enabled' : 'disabled'
+    );
+    $w->startTag(
+        'admissionControlPolicy',
+        'xsi:type' => 'ClusterFailoverLevelAdmissionControlPolicy'
+    );
+    $w->dataElement(failoverLevel => 1);
+    $w->endTag('admissionControlPolicy');
+    $w->dataElement(admissionControlEnabled => 'true');
+    $w->startTag('defaultVmSettings');
+    $w->dataElement(restartPriority => 'medium');
+    $w->dataElement(isolationResponse => 'none');
+    $w->startTag('vmToolsMonitoringSettings');
+    $w->dataElement(enabled => 'true');
+    $w->dataElement(failureInterval => 30);
+    $w->dataElement(minUpTime => 120);
+    $w->dataElement(maxFailures => 3);
+    $w->dataElement(maxFailureWindow => 3600);
+    $w->endTag('vmToolsMonitoringSettings');
+    $w->endTag('defaultVmSettings');
+    $w->endTag('dasConfig');
+    $w->startTag('drsConfig');
+    $w->dataElement(enabled => $args{drs} ? 'true' : 'false');
+    $w->dataElement(defaultVmBehavior => $args{drs_default});
+    $w->dataElement(vmotionRate => $args{drs_rate});
+    $w->endTag('drsConfig');
+    $w->startTag('dpmConfig');
+    $w->dataElement(enabled => $args{dpm} ? 'true' : 'false');
+    $w->dataElement(hostPowerActionRate => $args{dpm_rate});
+    $w->endTag('dpmConfig');
+    $w->endTag('spec');
+    $w->end;
+
+    my $response = $self->request(
+        Folder => $datacenter,
+        CreateClusterEx => $spec,
+    );
+    croak "Wrong response from the server: $response"
+        if $response !~ /<returnval type="ClusterComputeResource">([^<]+)<\/returnval>/;
+    return $1;
+}
+#-------------------------------------------------------------------------------
+
+=head2 add_host
+
+    $v->add_host(%parameters)
+
+Adds a host to the cluster.
+
+Required parameters:
+
+=over
+
+=item cluster =E<gt> $cluster_name
+
+Name of the target cluster.
+
+=item hostname =E<gt> $esxi_hostname
+
+The DNS name or IP address of the host.
+
+=item password =E<gt> $esxi_password
+
+The password for the administration account.
+
+=back
+
+Optional parameters:
+
+=over
+
+=item port =E<gt> $port
+
+The port number for the connection (443 by default).
+
+=item username =E<gt> $username
+
+The administration account on the host (root by default).
+
+=back
+
+=cut
+
+sub add_host {
+    my $self = shift;
+    my %args = (
+        cluster    => undef,
+        hostname   => undef,
+        port       => 443,
+        username   => 'root',
+        password   => undef,
+        @_
+    );
+    for (qw{ cluster hostname password }) {
+        croak "Required parameter '$_' isn't defined" if not defined $args{$_};
+    }
+
+    my $host_cert = (get_https3($args{hostname}, $args{port}, '/'))[3]
+        or croak "Can't get certificate from the host '$args{hostname}'";
+    my $fingerprint = Net::SSLeay::X509_get_fingerprint($host_cert, "sha1");
+
+    my $cluster = $self->get_moid($args{cluster}, 'ClusterComputeResource');
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->startTag('spec');
+    $w->dataElement(hostName => $args{hostname});
+    $w->dataElement(port => $args{port});
+    $w->dataElement(sslThumbprint => $fingerprint);
+    $w->dataElement(userName => $args{username});
+    $w->dataElement(password => $args{password});
+    $w->dataElement(force => 'true');
+    $w->endTag('spec');
+    $w->dataElement(asConnected => 'true');
+    $w->end;
+    return $self->run_task(
+        ClusterComputeResource => $cluster,
+        AddHost_Task => $spec,
+    );
+}
+#-------------------------------------------------------------------------------
+
+=head2 host_agent_vm_settings
+
+    $v->host_agent_vm_settings($host, $datastore, $network)
+
+Updates the host's ESX agent configuration.
+
+=cut
+
+sub host_agent_vm_settings {
+    my ($self, $host, $datastore, $network) = @_;
+
+    my $eam = $self->get_property('configManager.esxAgentHostManager',
+        of    => 'HostSystem',
+        where => { name => $host },
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->startTag('configInfo');
+    $w->dataElement(
+        agentVmDatastore => $self->get_moid($datastore, 'Datastore'),
+        type => 'Datastore',
+    );
+    $w->dataElement(
+        agentVmNetwork => $self->get_moid($network, 'Network'),
+        type => 'Network',
+    );
+    $w->endTag('configInfo');
+    $w->end;
+
+    $self->request(
+        HostEsxAgentHostManager => $eam,
+        EsxAgentHostManagerUpdateConfig => $spec,
     );
     return 1;
 }

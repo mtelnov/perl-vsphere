@@ -2148,6 +2148,98 @@ sub host_agent_vm_settings {
 }
 #-------------------------------------------------------------------------------
 
+=head2 add_license
+
+    $v->add_license($license_key)
+
+Adds a license to the inventory of available licenses.
+
+=cut
+
+sub add_license {
+    my ($self, $license) = @_;
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(licenseKey => $license);
+    $w->end;
+    my $response = $self->request(
+        LicenseManager => $self->{service}{licenseManager},
+        AddLicense => $spec,
+    );
+    my $xml = XMLin(
+        $response,
+        ForceArray => [qw{ labels properties }],
+    );
+    return $xml->{'soapenv:Body'}{AddLicenseResponse}{returnval};
+}
+#-------------------------------------------------------------------------------
+
+=head2 assign_license
+
+    $v->assign_license($entity, $license_key)
+
+Update the license associated with an entity.
+
+=cut
+
+sub assign_license {
+    my ($self, $entity, $license) = @_;
+
+    my $lam = $self->get_property('licenseAssignmentManager',
+        of => 'LicenseManager',
+        moid => $self->{service}{licenseManager},
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(entity => $entity);
+    $w->dataElement(licenseKey => $license);
+    $w->end;
+    my $response = $self->request(
+        LicenseAssignmentManager => $lam,
+        UpdateAssignedLicense => $spec,
+    );
+    my $xml = XMLin(
+        $response,
+        ForceArray => [qw{ labels properties }],
+    );
+    return $xml->{'soapenv:Body'}{UpdateAssignedLicenseResponse}{returnval};
+}
+#-------------------------------------------------------------------------------
+
+=head2 assign_license_to_vc
+
+    $v->assign_license_to_vc($license_key)
+
+Update the license associated with the current vCenter.
+
+=cut
+
+sub assign_license_to_vc {
+    my ($self, $license) = @_;
+    return $self->assign_license(
+        $self->{service}{about}{instanceUuid},
+        $license,
+    );
+}
+#-------------------------------------------------------------------------------
+
+=head2 assign_license_to_host
+
+    $v->assign_license_to_host($host, $license_key)
+
+Update the license associated with the current vCenter.
+
+=cut
+
+sub assign_license_to_host {
+    my ($self, $host, $license) = @_;
+    return $self->assign_license(
+        $self->get_moid($host, 'HostSystem'),
+        $license,
+    );
+}
+#-------------------------------------------------------------------------------
+
 1;
 
 __END__

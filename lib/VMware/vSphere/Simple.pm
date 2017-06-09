@@ -2240,6 +2240,109 @@ sub assign_license_to_host {
 }
 #-------------------------------------------------------------------------------
 
+=head2 set_host_service_policy
+
+    $v->set_host_service_policy($host, $service, $policy)
+
+Updates the activation policy of the service.
+Allowed values for the policy:
+
+=over
+
+=item automatic
+
+Service should run if and only if it has open firewall ports. 
+
+=item off
+
+Service should not be started when the host starts up. 
+
+=item on
+
+Service should be started when the host starts up. 
+
+=back
+
+=cut
+
+sub set_host_service_policy {
+    my ($self, $host, $service, $policy) = @_;
+
+    my $hss = $self->get_property('configManager.serviceSystem',
+        of   => 'HostSystem',
+        moid => $self->get_moid($host, 'HostSystem'),
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(id => $service);
+    $w->dataElement(policy => $policy);
+    $w->end;
+    $self->request(
+        HostServiceSystem   => $hss,
+        UpdateServicePolicy => $spec,
+    );
+    return 1;
+}
+#-------------------------------------------------------------------------------
+
+=head2 enable_ruleset
+
+    $v->enable_ruleset($host, $ruleset)
+
+Opens the firewall ports belonging to the specified ruleset. If the ruleset has
+a managed service with a policy of 'auto' that is not running, starts the
+service.
+
+=cut
+
+sub enable_ruleset {
+    my ($self, $host, $ruleset) = @_;
+
+    my $hfs = $self->get_property('configManager.firewallSystem',
+        of   => 'HostSystem',
+        moid => $self->get_moid($host, 'HostSystem'),
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(id => $ruleset);
+    $w->end;
+    $self->request(
+        HostFirewallSystem  => $hfs,
+        EnableRuleset => $spec,
+    );
+    return 1;
+}
+#-------------------------------------------------------------------------------
+
+=head2 disable_ruleset
+
+    $v->disable_ruleset($host, $ruleset)
+
+Opens the firewall ports belonging to the specified ruleset. If the ruleset has
+a managed service with a policy of 'auto' that is not running, starts the
+service.
+
+=cut
+
+sub disable_ruleset {
+    my ($self, $host, $ruleset) = @_;
+
+    my $hfs = $self->get_property('configManager.firewallSystem',
+        of   => 'HostSystem',
+        moid => $self->get_moid($host, 'HostSystem'),
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(id => $ruleset);
+    $w->end;
+    $self->request(
+        HostFirewallSystem  => $hfs,
+        DisableRuleset => $spec,
+    );
+    return 1;
+}
+#-------------------------------------------------------------------------------
+
 1;
 
 __END__

@@ -7,7 +7,9 @@ use warnings;
 
 use Carp;
 use Net::SSLeay qw{ get_https3 };
+use Scalar::Util qw{ blessed };
 use URI::Escape;
+use VMware::vSphere::MOID;
 use XML::Simple;
 use XML::Writer;
 
@@ -128,9 +130,11 @@ default.
 sub get_moid {
     my ($self, $name, $type) = @_;
     croak "Name of the managed object isn't defined" if not defined $name;
+    return $name if blessed $name and $name->isa('VMware::vSphere::MOID');
     $type ||= 'VirtualMachine';
     return $self->{name_cache}{$type}{$name}
-        if defined $self->{name_cache}{$type}{$name};
+        if not $self->{disable_name_cache}
+           and defined $self->{name_cache}{$type}{$name};
 
     my $p = $self->get_properties(
         of         => $type,
@@ -138,8 +142,9 @@ sub get_moid {
         properties => [ 'name' ],
     );
     my $moid = (keys %$p)[0];
+    croak "Can't find $type with name $name" if not defined $moid;
     $self->{name_cache}{$type}{$name} = $moid;
-    return $moid;
+    return VMware::vSphere::MOID->new($moid);
 }
 #-------------------------------------------------------------------------------
 
@@ -202,7 +207,8 @@ sub get_vm_path {
     croak "VM name isn't defined" if not defined $vm_name;
 
     return $self->get_property('config.files.vmPathName',
-        where => { name => $vm_name },
+        of   => 'VirtualMachine',
+        moid => $self->get_moid($vm_name),
     );
 }
 #-------------------------------------------------------------------------------
@@ -221,7 +227,8 @@ sub get_vm_powerstate {
     croak "VM name isn't defined" if not defined $vm_name;
 
     return $self->get_property('runtime.powerState',
-        where => { name => $vm_name },
+        of   => 'VirtualMachine',
+        moid => $self->get_moid($vm_name),
     );
 }
 #-------------------------------------------------------------------------------
@@ -239,7 +246,8 @@ sub tools_is_running {
     croak "VM name isn't defined" if not defined $vm_name;
 
     return $self->get_property('guest.toolsRunningStatus',
-        where => { name => $vm_name },
+        of   => 'VirtualMachine',
+        moid => $self->get_moid($vm_name),
     ) eq 'guestToolsRunning';
 }
 #-------------------------------------------------------------------------------
@@ -257,8 +265,8 @@ sub get_datastore_url {
     croak "Datastore name isn't defined" if not defined $name;
 
     return $self->get_property('info.url',
-        of    => 'Datastore',
-        where => { 'info.name' => $name },
+        of   => 'Datastore',
+        moid => $self->get_moid($name, 'Datastore'),
     );
 }
 #-------------------------------------------------------------------------------
@@ -1119,8 +1127,8 @@ sub add_nas_storage {
 
     # Get HostDatastoreSystem
     my $datastoreSystem = $self->get_property('configManager.datastoreSystem',
-        of    => 'HostSystem',
-        where => { name => $args{host_name} },
+        of   => 'HostSystem',
+        moid => $self->get_moid($args{host_name}, 'HostSystem'),
     );
 
     my $w = XML::Writer->new(OUTPUT => \my $spec);
@@ -1190,8 +1198,8 @@ sub find_files {
 
     # Get HostDatastoreBrowser
     my $browser = $self->get_property('browser',
-        of => 'Datastore',
-        where => { 'name' => $args{datastore} },
+        of   => 'Datastore',
+        moid => $self->get_moid($args{datastore}, 'Datastore'),
     );
 
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
@@ -1296,20 +1304,20 @@ sub register_vm {
         if $self->debug;
 
     my $datacenter = $self->get_property('vmFolder',
-        of    => 'Datacenter',
-        where => { name => $args{datacenter} },
+        of => 'Datacenter',
+        moid => $self->get_moid($args{datacenter}, 'Datacenter'),
     );
 
     my $cluster;
     if (defined $args{cluster}) {
         $cluster = $self->get_property('resourcePool',
-            of    => 'ClusterComputeResource',
-            where => { name => $args{cluster} },
+            of   => 'ClusterComputeResource',
+            moid => $self->get_moid($args{cluster}, 'ClusterComputeResource'),
         );
     } else {
         $cluster = $self->get_property('resourcePool',
-            of    => 'ComputeResource',
-            where => { name => $args{host} },
+            of   => 'ComputeResource',
+            moid => $self->get_moid($args{host}, 'ComputeResource'),
         );
     }
 
@@ -1416,10 +1424,8 @@ sub clone {
         if $self->debug;
 
     my $p = $self->get_properties(
-        properties => [qw{
-            parent parentVApp datastore
-        }],
-        where => { name => $vm_name },
+        properties => [qw{ parent parentVApp datastore }],
+        moid       => $self->get_moid($vm_name),
     );
 
     my $vm_id = (keys %$p)[0]
@@ -1485,10 +1491,8 @@ sub linked_clone {
         if $self->debug;
 
     my $p = $self->get_properties(
-        properties => [qw{
-            parent parentVApp snapshot.currentSnapshot
-        }],
-        where => { name => $vm_name },
+        properties => [qw{ parent parentVApp snapshot.currentSnapshot }],
+        moid       => $self->get_moid($vm_name),
     );
 
     my $vm_id = (keys %$p)[0]
@@ -1740,8 +1744,8 @@ sub add_portgroup {
     $vlan ||= 0;
 
     my $network_system = $self->get_property('configManager.networkSystem',
-        of    => 'HostSystem',
-        where => { name => $host },
+        of   => 'HostSystem',
+        moid => $self->get_moid($host, 'HostSystem'),
     );
 
     my $w = XML::Writer->new(OUTPUT => \my $spec);
@@ -1787,8 +1791,8 @@ sub remove_portgroup {
     my ($self, $host, $portgroup) = @_;
 
     my $network_system = $self->get_property('configManager.networkSystem',
-        of    => 'HostSystem',
-        where => { name => $host },
+        of   => 'HostSystem',
+        moid => $self->get_moid($host, 'HostSystem'),
     );
 
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
@@ -1831,8 +1835,8 @@ sub change_esxi_settings {
     my %settings = @_;
 
     my $option_manager = $self->get_property('configManager.advancedOption',
-        of    => 'HostSystem',
-        where => { name => $host },
+        of   => 'HostSystem',
+        moid => $self->get_moid($host, 'HostSystem'),
     );
 
     my $supported = $self->get_property('supportedOption',
@@ -1978,8 +1982,8 @@ sub create_cluster {
     }
 
     my $datacenter = $self->get_property('hostFolder',
-        of    => 'Datacenter',
-        where => { name => $args{datacenter} },
+        of   => 'Datacenter',
+        moid => $self->get_moid($args{datacenter}, 'Datacenter'),
     );
 
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
@@ -2123,8 +2127,8 @@ sub host_agent_vm_settings {
     my ($self, $host, $datastore, $network) = @_;
 
     my $eam = $self->get_property('configManager.esxAgentHostManager',
-        of    => 'HostSystem',
-        where => { name => $host },
+        of   => 'HostSystem',
+        moid => $self->get_moid($host, 'HostSystem'),
     );
 
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
@@ -2340,6 +2344,41 @@ sub disable_ruleset {
         DisableRuleset => $spec,
     );
     return 1;
+}
+#-------------------------------------------------------------------------------
+
+=head2 get_parent
+
+    $v->get_parent($parent_type, of => $type, moid => $moid)
+
+Returns a parent object with specified type of the managed object.
+
+=cut
+
+sub get_parent {
+    my $self = shift;
+    my $parent_type = shift or croak "Parent type isn't defined";
+    my %args = (
+        of   => 'VirtualMachine',
+        moid => undef,
+        @_,
+    );
+    my $type = $args{of} or croak "Required parameter 'of' isn't defined";
+    my $moid = $args{moid} or croak "Required parameter 'moid' isn't defined";
+
+    while (1) {
+        my $parent = $self->get_property('parent',
+            of        => $type,
+            moid      => $moid,
+            keep_type => 1,
+        );
+        croak "Can't get parent of $type with moid $moid"
+            unless defined ref $parent and ref $parent eq 'HASH';
+        return VMware::vSphere::MOID->new($parent->{content})
+            if $parent->{type} eq $parent_type;
+        $moid = $parent->{content};
+        $type = $parent->{type};
+    }
 }
 #-------------------------------------------------------------------------------
 

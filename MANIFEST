@@ -7,6 +7,7 @@ bin/vsphere
 lib/VMware/vSphere.pm
 lib/VMware/vSphere/App.pm
 lib/VMware/vSphere/Const.pm
+lib/VMware/vSphere/MOID.pm
 lib/VMware/vSphere/Simple.pm
 t/00-pod.t
 t/01-require.t

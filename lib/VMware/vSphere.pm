@@ -2,7 +2,7 @@ package VMware::vSphere;
 
 our $VERSION = '1.02';
 
-use strict;
+use 5.012;
 use warnings;
 
 use Carp;
@@ -17,7 +17,7 @@ sub new {
         host           => undef,
         username       => undef,
         password       => undef,
-        debug          => 0,
+        debug          => undef,
         ssl_verifyhost => 0,
         ssl_verifypeer => 0,
         cookies_file   => 'cookie.txt',
@@ -31,7 +31,7 @@ sub new {
         $self->{$_} = $args{$_};
     }
     # Enable debug messages
-    $self->{debug} = $args{debug} || 0;
+    $self->{debug} = $args{debug} // $ENV{VSPHERE_DEBUG} // 0;
     $self->{save_cookies} = $args{save_cookies} ? 1 : 0;
 
     $self->{curl} = WWW::Curl::Easy->new()
@@ -314,6 +314,7 @@ sub get_property {
     );
 
     my $objects = $self->get_properties(%args);
+    return unless defined ref $objects and ref $objects eq 'HASH';
     return $objects->{(sort keys %{$objects})[0]}{$property};
 }
 

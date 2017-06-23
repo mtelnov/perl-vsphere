@@ -218,7 +218,7 @@ sub get_vm_path {
     $powerstate = $v->get_vm_powerstate($vm_name)
 
 Returns the string representation of VM powersate: poweredOff, poweredOn,
-suspended.
+suspended or unknown.
 
 =cut
 
@@ -226,10 +226,11 @@ sub get_vm_powerstate {
     my ($self, $vm_name) = @_;
     croak "VM name isn't defined" if not defined $vm_name;
 
-    return $self->get_property('runtime.powerState',
+    my $powerstate = $self->get_property('runtime.powerState',
         of   => 'VirtualMachine',
         moid => $self->get_moid($vm_name),
-    );
+    ) || 'unknown';
+    return $powerstate;
 }
 #-------------------------------------------------------------------------------
 

@@ -59,6 +59,16 @@ sub request {
     croak "Missed object id" if not defined $id;
     croak "Missed method name" if not defined $method;
 
+    # Reconnect if session timed out
+    if (not $do_not_try_login and defined $self->{last_request_time}) {
+        my $timeout = $self->settings->{'vpxd.httpClientIdleTimeout'};
+        if (defined $timeout and time - $self->{last_request_time} >= $timeout) {
+            print STDERR "Going to reconnect before $method of $id [$type]"
+                if $self->{debug};
+            $self->login;
+        }
+    }
+
     my $curl = $self->{curl};
 
     my $request = <<"EOF";
@@ -90,6 +100,7 @@ EOF
         croak "Can't perform request: $retcode ".
             $curl->strerror($retcode)." ".$curl->errbuf;
     }
+    $self->{last_request_time} = time;
     print STDERR "Got response:\n", '-'x80, "\n", $response, "\n", '-'x80, "\n"
         if $self->{debug} and defined $response;
 
@@ -178,6 +189,7 @@ sub get_properties {
         key_attr    => {},
         xml_params  => undef,
         keep_type   => 0,
+        skip_login  => 0,
         @_
     );
 
@@ -237,6 +249,7 @@ sub get_properties {
     my $response = $self->request(
         PropertyCollector => $self->{service}{propertyCollector},
         RetrievePropertiesEx => $spec,
+        $args{skip_login}
     );
     my %result;
 
@@ -287,6 +300,7 @@ sub get_properties {
         $response = $self->request(
             PropertyCollector => $self->{service}{propertyCollector},
             ContinueRetrievePropertiesEx => "<token>$token</token>",
+            $args{skip_login}
         );
     };
     print Dumper(\%result) if $self->debug;
@@ -314,8 +328,10 @@ sub get_property {
     );
 
     my $objects = $self->get_properties(%args);
-    return unless defined ref $objects and ref $objects eq 'HASH';
-    return $objects->{(sort keys %{$objects})[0]}{$property};
+    return unless defined ref $objects and ref $objects eq 'HASH' and %$objects;
+    my $obj = $objects->{(sort keys %{$objects})[0]};
+    return unless defined ref $obj and ref $obj eq 'HASH';
+    return $obj->{$property};
 }
 
 sub run_task {
@@ -382,7 +398,7 @@ sub login {
     my $self = shift;
     my $sm_moid = $self->{service}{sessionManager};
     my $sm = $self->get_properties(
-        of => 'SessionManager', moid => $sm_moid,
+        of => 'SessionManager', moid => $sm_moid, skip_login => 1,
     );
     if (defined $sm->{$sm_moid}{currentSession}) {
         return $sm->{$sm_moid}{currentSession};
@@ -397,6 +413,21 @@ sub login {
         1
     );
     return $self->{UserSession};
+}
+
+sub settings {
+    my $self = shift;
+    return $self->{settings} if defined $self->{settings};
+    my $om = $self->{service}{setting};
+    my $settings = $self->get_property('setting',
+        of         => 'OptionManager',
+        moid       => $om,
+        key_attr   => { OptionValue => "key" },
+        xml_params => [ ContentKey => "-value" ],
+        skip_login => 1,
+    );
+    $self->{settings} = $settings->{OptionValue};
+    return $self->{settings};
 }
 
 sub debug {

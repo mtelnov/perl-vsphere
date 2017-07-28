@@ -61,8 +61,7 @@ sub request {
 
     # Reconnect if session timed out
     if (not $do_not_try_login and defined $self->{last_request_time}) {
-        my $timeout = $self->settings->{'vpxd.httpClientIdleTimeout'};
-        if (defined $timeout and time - $self->{last_request_time} >= $timeout) {
+        if (time - $self->{last_request_time} >= $self->timeout()) {
             print STDERR "Going to reconnect before $method of $id [$type]"
                 if $self->{debug};
             $self->login;
@@ -416,9 +415,10 @@ sub login {
 }
 
 sub settings {
-    my $self = shift;
-    return $self->{settings} if defined $self->{settings};
-    my $om = $self->{service}{setting};
+    my ($self, $key) = @_;
+    return $self->{settings}{$key}
+        if defined ref $self->{settings} and ref $self->{settings} eq 'HASH';
+    my $om = $self->{service}{setting} or return;
     my $settings = $self->get_property('setting',
         of         => 'OptionManager',
         moid       => $om,
@@ -426,8 +426,16 @@ sub settings {
         xml_params => [ ContentKey => "-value" ],
         skip_login => 1,
     );
-    $self->{settings} = $settings->{OptionValue};
-    return $self->{settings};
+    return unless defined ref $settings and ref $settings eq 'HASH';
+    $self->{settings} = $settings->{OptionValue} // {};
+    return $self->{settings}{$key};
+}
+
+sub timeout {
+    my ($self) = @_;
+    $self->{timeout} = $self->settings('vpxd.httpClientIdleTimeout') // 900
+        if not defined $self->{timeout};
+    return $self->{timeout};
 }
 
 sub debug {

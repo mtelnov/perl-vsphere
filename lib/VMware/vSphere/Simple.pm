@@ -10,6 +10,7 @@ use Net::SSLeay qw{ get_https3 };
 use Scalar::Util qw{ blessed };
 use URI::Escape;
 use VMware::vSphere::MOID;
+use WWW::Curl::Easy;
 use XML::Simple;
 use XML::Writer;
 
@@ -1527,6 +1528,98 @@ sub linked_clone {
         VirtualMachine => $vm_id,
         CloneVM_Task   => $spec,
     );
+}
+#-------------------------------------------------------------------------------
+
+=head2 copy_into_vm
+
+    $v->copy_into_vm(
+        $vm_name,
+        username  => $username,
+        password  => $password,
+        local     => $local_path,
+        remote    => $remote_path,
+        overwrite => $boolean,
+    )
+
+Copies a local file into the guest operating system.
+
+=cut
+
+sub copy_into_vm {
+    my $self    = shift;
+    my $vm_name = shift;
+    my %args = (
+        username  => undef,
+        password  => undef,
+        local     => undef,
+        remote    => undef,
+        overwrite => 0,
+        @_
+    );
+
+    for (qw{ username password local remote }) {
+        croak "Missed required argument '$_'" unless defined $args{$_};
+    }
+
+    print STDERR "Copy '$args{local}' to '$args{remote}' into $vm_name\n"
+        if $self->debug;
+
+    my $size = (stat $args{local})[7];
+    croak "Can't get size of file '$args{local}'" unless defined $size;
+
+    my $file_manager = $self->get_property('fileManager',
+        of   => 'GuestOperationsManager',
+        moid => $self->{service}{guestOperationsManager},
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(vm => $self->get_moid($vm_name), type => 'VirtualMachine');
+    $w->startTag('auth', 'xsi:type' => 'NamePasswordAuthentication');
+    $w->dataElement(interactiveSession => 'false');
+    $w->dataElement(username => $args{username});
+    $w->dataElement(password => $args{password});
+    $w->endTag('auth');
+    $w->dataElement(guestFilePath => $args{remote});
+    $w->startTag('fileAttributes', 'xsi:type' => 'GuestFileAttributes');
+    $w->endTag('fileAttributes');
+    $w->dataElement(fileSize => $size);
+    $w->dataElement(overwrite => $args{overwrite} ? 'true' : 'false');
+    $w->end;
+
+    my $response = $self->request(
+        GuestFileManager => $file_manager,
+        InitiateFileTransferToGuest => $spec,
+    );
+    my $xml = XMLin($response);
+    croak "Invalid response: $response" unless ref $xml and ref $xml eq 'HASH';
+    my $url = $xml->{'soapenv:Body'}{InitiateFileTransferToGuestResponse}{returnval}
+        or croak "Invalid response: $response";
+
+    open my $fh, '<', $args{local}
+        or croak "Can't open local file '$args{local}': $!";
+    binmode $fh;
+
+    my $curl = $self->{curl};
+    $curl->setopt(CURLOPT_URL, $url);
+    $curl->setopt(CURLOPT_UPLOAD, 1);
+    $curl->setopt(CURLOPT_PUT, 1);
+    $curl->setopt(CURLOPT_INFILESIZE_LARGE, $size);
+    $curl->setopt(CURLOPT_READDATA, $fh);
+
+    $response = undef;
+    $curl->setopt(CURLOPT_WRITEDATA, \$response);
+    if (my $retcode = $curl->perform) {
+        croak "Can't upload file to $url: $retcode ".$curl->strerror($retcode).
+              " ".$curl->errbuf;
+    }
+    print STDERR "Got response:\n", '-'x80, "\n", $response, "\n", '-'x80, "\n"
+        if $self->{debug} and defined $response;
+
+    my $http_code = $curl->getinfo(CURLINFO_HTTP_CODE);
+    return 1 if $http_code == 200;
+    croak "Host returned an error: $http_code" if not defined $response;
+    croak "Host returned an error: $response";
 }
 #-------------------------------------------------------------------------------
 

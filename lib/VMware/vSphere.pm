@@ -23,6 +23,7 @@ sub new {
         cookies_file   => 'cookie.txt',
         save_cookies   => 0,
         ipv6           => 0,
+        proxy          => undef,
         @_
     );
     my $self = {};
@@ -45,6 +46,8 @@ sub new {
     $self->{curl}->setopt(CURLOPT_COOKIEFILE, $args{cookies_file});
     $self->{curl}->setopt(CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4)
         unless $args{ipv6};
+    $self->{curl}->setopt(CURLOPT_PROXY, $args{proxy})
+        if defined $args{proxy};
 
     bless $self, $class;
     $self->refresh_service;

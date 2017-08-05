@@ -20,7 +20,7 @@ sub new {
         debug          => undef,
         ssl_verifyhost => 0,
         ssl_verifypeer => 0,
-        cookies_file   => 'cookie.txt',
+        cookies_file   => '',
         save_cookies   => 0,
         ipv6           => 0,
         proxy          => undef,
@@ -42,12 +42,16 @@ sub new {
     $self->{curl}->setopt(CURLOPT_SSL_VERIFYPEER, $args{ssl_verifypeer} ? 1 : 0);
     $self->{curl}->setopt(CURLOPT_VERBOSE, $self->{debug});
     $self->{curl}->setopt(CURLOPT_USERAGENT, 'VMware VI Client/5.0.0');
-    $self->{curl}->setopt(CURLOPT_COOKIEJAR, $args{cookies_file});
+    $self->{curl}->setopt(CURLOPT_COOKIELIST, 'ALL'); # clear cookies in memory
+    $self->{curl}->setopt(CURLOPT_COOKIEJAR, $args{cookies_file})
+        if $args{save_cookies};
     $self->{curl}->setopt(CURLOPT_COOKIEFILE, $args{cookies_file});
     $self->{curl}->setopt(CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4)
         unless $args{ipv6};
     $self->{curl}->setopt(CURLOPT_PROXY, $args{proxy})
         if defined $args{proxy};
+
+    $self->{pid} = $$;
 
     bless $self, $class;
     $self->refresh_service;
@@ -86,6 +90,9 @@ sub request {
     </soap:Body>
 </soap:Envelope>
 EOF
+    $curl->setopt(CURLOPT_PUT, 0);
+    $curl->setopt(CURLOPT_HTTPGET, 0);
+    $curl->setopt(CURLOPT_UPLOAD, 0);
     $curl->setopt(CURLOPT_POST, 1);
     $curl->setopt(CURLOPT_HTTPHEADER, [
         'Content-Type: text/xml; charset=utf-8',
@@ -450,18 +457,16 @@ sub debug {
     return $self->{debug};
 }
 
-
 sub DESTROY {
     my $self = shift;
     if (defined $self and defined $self->{UserSession}
-            and not $self->{save_cookies}
+        and not $self->{save_cookies} and $$ == $self->{pid}
     ) {
         $self->request(
             SessionManager => $self->{service}{sessionManager},
             Logout         => undef,
             2
         );
-        $self->{curl}->setopt(CURLOPT_COOKIELIST, 'ALL');
     }
     return 1;
 }

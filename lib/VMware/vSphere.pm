@@ -1,6 +1,6 @@
 package VMware::vSphere;
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 use 5.012;
 use warnings;

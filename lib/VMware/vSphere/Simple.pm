@@ -1,6 +1,6 @@
 package VMware::vSphere::Simple;
 
-our $VERSION = '1.01';
+our $VERSION = '1.03';
 
 use strict;
 use warnings;
@@ -2031,6 +2031,7 @@ sub list_vm_processes {
         password    => undef,
         interactive => undef,
         pids        => [],
+        @_
     );
 
     for (qw{ username password }) {

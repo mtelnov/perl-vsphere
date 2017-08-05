@@ -5,7 +5,7 @@
 #
 
 Name:    perl-VMware-vSphere
-Version: 1.02
+Version: 1.03
 Release: 1
 %define  cpan_name VMware-vSphere
 Summary:   Pure Perl API and CLI for VMware vSphere

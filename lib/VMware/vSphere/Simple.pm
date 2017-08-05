@@ -1849,7 +1849,13 @@ sub copy_from_vm {
 
 =head2 run_in_vm
 
-    $pid = $v->run_in_vm($vm_name, $username, $password, $cmd, %options)
+    $pid = $v->run_in_vm(
+        $vm_name,
+        username => $username,
+        password => $password,
+        path     => $cmd,
+        %options
+    )
 
 Starts a program in the guest operating system and returns its pid. When the 
 process completes, its exit code and end time will be available for 5 minutes 
@@ -1863,15 +1869,15 @@ Required arguments:
 
 Name of the target virtual machine.
 
-=item $username
+=item username =E<gt> $username
 
 Login to authenticate in the guest operating system.
 
-=item $password
+=item password =E<gt> $password
 
 Password for this login.
 
-=item $cmd
+=item path =E<gt> $path
 
 The absolute path to the program to start. For Linux guest operating systems, 
 /bin/bash is used to start the program. For Solaris guest operating systems, 
@@ -1923,18 +1929,22 @@ This is set to true if the client wants an interactive session in the guest.
 sub run_in_vm {
     my $self     = shift;
     my $vm_name  = shift;
-    my $username = shift;
-    my $password = shift;
-    my $cmd      = shift;
     my %args = (
-        args => '',
-        dir  => undef,
-        env  => [],
+        username    => undef,
+        password    => undef,
         interactive => 0,
+        path        => undef,
+        args        => '',
+        dir         => undef,
+        env         => [],
         @_,
     );
 
-    print STDERR "Run '$cmd $args{args}' in $vm_name\n" if $self->debug;
+    for (qw{ username password path }) {
+        croak "Missed required argument '$_'" unless defined $args{$_};
+    }
+
+    print STDERR "Run '$args{path} $args{args}' in $vm_name\n" if $self->debug;
 
     my $process_manager = $self->get_property('processManager',
         of   => 'GuestOperationsManager',
@@ -1944,14 +1954,12 @@ sub run_in_vm {
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
     $w->dataElement(vm => $self->get_moid($vm_name), type => 'VirtualMachine');
     $w->startTag('auth', 'xsi:type' => 'NamePasswordAuthentication');
-    $w->dataElement(
-        interactiveSession => $args{interactive} ? 'true' : 'false'
-    );
-    $w->dataElement(username => $username);
-    $w->dataElement(password => $password);
+    $w->dataElement(interactiveSession => $args{interactive} ? 'true':'false');
+    $w->dataElement(username => $args{username});
+    $w->dataElement(password => $args{password});
     $w->endTag('auth');
     $w->startTag('spec');
-    $w->dataElement(programPath => $cmd);
+    $w->dataElement(programPath => $args{path});
     $w->dataElement(arguments => $args{args});
     $w->dataElement(workingDirectory => $args{dir}) if $args{dir};
     $w->dataElement(envVariables => $_) for @{$args{env}};
@@ -1971,15 +1979,63 @@ sub run_in_vm {
 
 =head2 list_vm_processes
 
-    $proc_info = $v->list_vm_processes($vm_name, $username, $password, @pids)
+    $proc_info = $v->list_vm_processes(
+        $vm_name,
+        username => $username,
+        password => $password,
+        %options
+    )
 
 List the processes running in the guest operating system, plus those started by 
 C<run_in_vm()> that have recently completed.
 
+Required arguments:
+
+=over
+
+=item $vm_name
+
+Name of the target virtual machine.
+
+=item username =E<gt> $username
+
+Login to authenticate in the guest operating system.
+
+=item password =E<gt> $password
+
+Password for this login.
+
+=back
+
+Optional parameters:
+
+=over
+
+=item pids =E<gt> $array_reference
+
+Return information about processes specified by IDs only.
+
+=item interactive =E<gt> $boolean
+
+This is set to true if the client wants an interactive session in the guest.
+
+=back
+
 =cut
 
 sub list_vm_processes {
-    my ($self, $vm_name, $username, $password, @pids) = @_;
+    my $self    = shift;
+    my $vm_name = shift;
+    my %args = (
+        username    => undef,
+        password    => undef,
+        interactive => undef,
+        pids        => [],
+    );
+
+    for (qw{ username password }) {
+        croak "Missed required argument '$_'" unless defined $args{$_};
+    }
 
     my $process_manager = $self->get_property('processManager',
         of   => 'GuestOperationsManager',
@@ -1989,11 +2045,11 @@ sub list_vm_processes {
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
     $w->dataElement(vm => $self->get_moid($vm_name), type => 'VirtualMachine');
     $w->startTag('auth', 'xsi:type' => 'NamePasswordAuthentication');
-    $w->dataElement(interactiveSession => 'false');
-    $w->dataElement(username => $username);
-    $w->dataElement(password => $password);
+    $w->dataElement(interactiveSession => $args{interactive} ? 'true':'false');
+    $w->dataElement(username => $args{username});
+    $w->dataElement(password => $args{password});
     $w->endTag('auth');
-    $w->dataElement(pids => $_) for @pids;
+    $w->dataElement(pids => $_) for @{$args{pids}};
     $w->end;
 
     my $response = $self->request(

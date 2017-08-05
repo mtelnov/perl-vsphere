@@ -1531,6 +1531,134 @@ sub linked_clone {
 }
 #-------------------------------------------------------------------------------
 
+=head2 make_tmpdir_in_vm
+
+    $v->make_tmpdir_in_vm
+        $vm_name,
+        username => $username,
+        password => $password,
+        prefix   => $prefix,
+        suffix   => $suffix,
+        path     => $path,
+    )
+
+Creates a new unique temporary directory for the user to use as needed. The user
+is responsible for removing it when it is no longer needed.
+
+=cut
+
+sub make_tmpdir_in_vm {
+    my $self    = shift;
+    my $vm_name = shift;
+    my %args = (
+        username => undef,
+        password => undef,
+        prefix   => '',
+        suffix   => '',
+        path     => '',
+        @_
+    );
+
+    for (qw{ username password }) {
+        croak "Missed required argument '$_'" unless defined $args{$_};
+    }
+
+    print STDERR "Make temporary directory in $vm_name\n"
+        if $self->debug;
+
+    my $file_manager = $self->get_property('fileManager',
+        of   => 'GuestOperationsManager',
+        moid => $self->{service}{guestOperationsManager},
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(vm => $self->get_moid($vm_name), type => 'VirtualMachine');
+    $w->startTag('auth', 'xsi:type' => 'NamePasswordAuthentication');
+    $w->dataElement(interactiveSession => 'false');
+    $w->dataElement(username => $args{username});
+    $w->dataElement(password => $args{password});
+    $w->endTag('auth');
+    $w->dataElement(prefix => $args{prefix}) if defined $args{prefix};
+    $w->dataElement(suffix => $args{suffix}) if defined $args{suffix};
+    $w->dataElement(directoryPath => $args{path}) if defined $args{path};
+    $w->end;
+
+    my $response = $self->request(
+        GuestFileManager => $file_manager,
+        CreateTemporaryDirectoryInGuest => $spec,
+    );
+    my $xml = XMLin($response);
+    croak "Invalid response: $response" unless ref $xml and ref $xml eq 'HASH';
+    my $path = $xml->{'soapenv:Body'}{CreateTemporaryDirectoryInGuestResponse}{returnval}
+        or croak "Invalid response: $response";
+    return $path;
+}
+#-------------------------------------------------------------------------------
+
+=head2 make_tmpfile_in_vm
+
+    $v->make_tmpfile_in_vm
+        $vm_name,
+        username => $username,
+        password => $password,
+        prefix   => $prefix,
+        suffix   => $suffix,
+        path     => $path,
+    )
+
+Creates a new unique temporary file for the user to use as needed. The user is
+responsible for removing it when it is no longer needed.
+
+=cut
+
+sub make_tmpfile_in_vm {
+    my $self    = shift;
+    my $vm_name = shift;
+    my %args = (
+        username => undef,
+        password => undef,
+        prefix   => '',
+        suffix   => '',
+        path     => '',
+        @_
+    );
+
+    for (qw{ username password }) {
+        croak "Missed required argument '$_'" unless defined $args{$_};
+    }
+
+    print STDERR "Make temporary file in $vm_name\n"
+        if $self->debug;
+
+    my $file_manager = $self->get_property('fileManager',
+        of   => 'GuestOperationsManager',
+        moid => $self->{service}{guestOperationsManager},
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(vm => $self->get_moid($vm_name), type => 'VirtualMachine');
+    $w->startTag('auth', 'xsi:type' => 'NamePasswordAuthentication');
+    $w->dataElement(interactiveSession => 'false');
+    $w->dataElement(username => $args{username});
+    $w->dataElement(password => $args{password});
+    $w->endTag('auth');
+    $w->dataElement(prefix => $args{prefix}) if defined $args{prefix};
+    $w->dataElement(suffix => $args{suffix}) if defined $args{suffix};
+    $w->dataElement(directoryPath => $args{path}) if defined $args{path};
+    $w->end;
+
+    my $response = $self->request(
+        GuestFileManager => $file_manager,
+        CreateTemporaryFileInGuest => $spec,
+    );
+    my $xml = XMLin($response);
+    croak "Invalid response: $response" unless ref $xml and ref $xml eq 'HASH';
+    my $path = $xml->{'soapenv:Body'}{CreateTemporaryFileInGuestResponse}{returnval}
+        or croak "Invalid response: $response";
+    return $path;
+}
+#-------------------------------------------------------------------------------
+
 =head2 copy_into_vm
 
     $v->copy_into_vm(
@@ -1554,7 +1682,8 @@ sub copy_into_vm {
         password  => undef,
         local     => undef,
         remote    => undef,
-        overwrite => 0,
+        permissions => undef,
+        overwrite   => 0,
         @_
     );
 
@@ -1581,8 +1710,17 @@ sub copy_into_vm {
     $w->dataElement(password => $args{password});
     $w->endTag('auth');
     $w->dataElement(guestFilePath => $args{remote});
-    $w->startTag('fileAttributes', 'xsi:type' => 'GuestFileAttributes');
-    $w->endTag('fileAttributes');
+    if (defined $args{permissions}) {
+        $w->startTag('fileAttributes', 'xsi:type' => 'GuestPosixFileAttributes');
+        $w->dataElement(
+            permissions => oct($args{permissions}),
+            'xsi:type'  => 'xsd:long'
+        );
+        $w->endTag('fileAttributes');
+    } else {
+        $w->startTag('fileAttributes', 'xsi:type' => 'GuestFileAttributes');
+        $w->endTag('fileAttributes');
+    }
     $w->dataElement(fileSize => $size);
     $w->dataElement(overwrite => $args{overwrite} ? 'true' : 'false');
     $w->end;
@@ -1595,6 +1733,9 @@ sub copy_into_vm {
     croak "Invalid response: $response" unless ref $xml and ref $xml eq 'HASH';
     my $url = $xml->{'soapenv:Body'}{InitiateFileTransferToGuestResponse}{returnval}
         or croak "Invalid response: $response";
+    my $host = $self->{host};
+    $host =~ s/:\d+$//s;
+    $url =~ s{://\*}{://$host};
 
     open my $fh, '<', $args{local}
         or croak "Can't open local file '$args{local}': $!";
@@ -1602,6 +1743,8 @@ sub copy_into_vm {
 
     my $curl = $self->{curl};
     $curl->setopt(CURLOPT_URL, $url);
+    $curl->setopt(CURLOPT_POST, 0);
+    $curl->setopt(CURLOPT_HTTPHEADER, []);
     $curl->setopt(CURLOPT_UPLOAD, 1);
     $curl->setopt(CURLOPT_PUT, 1);
     $curl->setopt(CURLOPT_INFILESIZE_LARGE, $size);
@@ -1609,10 +1752,10 @@ sub copy_into_vm {
 
     $response = undef;
     $curl->setopt(CURLOPT_WRITEDATA, \$response);
-    if (my $retcode = $curl->perform) {
-        croak "Can't upload file to $url: $retcode ".$curl->strerror($retcode).
-              " ".$curl->errbuf;
-    }
+    my $retcode = $curl->perform;
+    close $fh;
+    croak "Can't upload file to $url: $retcode ".$curl->strerror($retcode).
+          " ".$curl->errbuf if $retcode;
     print STDERR "Got response:\n", '-'x80, "\n", $response, "\n", '-'x80, "\n"
         if $self->{debug} and defined $response;
 
@@ -1620,6 +1763,87 @@ sub copy_into_vm {
     return 1 if $http_code == 200;
     croak "Host returned an error: $http_code" if not defined $response;
     croak "Host returned an error: $response";
+}
+#-------------------------------------------------------------------------------
+
+=head2 copy_from_vm
+
+    $v->copy_from_vm(
+        $vm_name,
+        username  => $username,
+        password  => $password,
+        remote    => $remote_path,
+        local     => $local_path,
+    )
+
+Copies a file from the guest operating system.
+
+=cut
+
+sub copy_from_vm {
+    my $self    = shift;
+    my $vm_name = shift;
+    my %args = (
+        username => undef,
+        password => undef,
+        remote   => undef,
+        local    => undef,
+        @_
+    );
+
+    for (qw{ username password local remote }) {
+        croak "Missed required argument '$_'" unless defined $args{$_};
+    }
+
+    print STDERR "Copy '$args{remote}' from $vm_name to '$args{local}'\n"
+        if $self->debug;
+
+    my $file_manager = $self->get_property('fileManager',
+        of   => 'GuestOperationsManager',
+        moid => $self->{service}{guestOperationsManager},
+    );
+
+    my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
+    $w->dataElement(vm => $self->get_moid($vm_name), type => 'VirtualMachine');
+    $w->startTag('auth', 'xsi:type' => 'NamePasswordAuthentication');
+    $w->dataElement(interactiveSession => 'false');
+    $w->dataElement(username => $args{username});
+    $w->dataElement(password => $args{password});
+    $w->endTag('auth');
+    $w->dataElement(guestFilePath => $args{remote});
+    $w->end;
+
+    my $response = $self->request(
+        GuestFileManager => $file_manager,
+        InitiateFileTransferFromGuest => $spec,
+    );
+    my $xml = XMLin($response);
+    croak "Invalid response: $response" unless ref $xml and ref $xml eq 'HASH';
+    my $r = $xml->{'soapenv:Body'}{InitiateFileTransferFromGuestResponse}{returnval}
+        or croak "Invalid response: $response";
+    my $host = $self->{host};
+    $host =~ s/:\d+$//s;
+    $r->{url} =~ s{://\*}{://$host};
+
+    open my $fh, '>', $args{local}
+        or croak "Can't open local file '$args{local}': $!";
+    binmode $fh;
+
+    my $curl = $self->{curl};
+    $curl->setopt(CURLOPT_URL, $r->{url});
+    $curl->setopt(CURLOPT_POST, 0);
+    $curl->setopt(CURLOPT_UPLOAD, 0);
+    $curl->setopt(CURLOPT_PUT, 0);
+    $curl->setopt(CURLOPT_HTTPGET, 1);
+    $curl->setopt(CURLOPT_HTTPHEADER, []);
+    $curl->setopt(CURLOPT_WRITEDATA, $fh);
+    my $retcode = $curl->perform;
+    close $fh or croak "Can't close local file '$args{local}': $!";
+    croak "Can't download $r->{url}: $retcode ".$curl->strerror($retcode).
+          " ".$curl->errbuf if $retcode;
+    my $http_code = $curl->getinfo(CURLINFO_HTTP_CODE);
+    return 1 if $http_code == 200;
+    croak "Host returned an error: $http_code";
 }
 #-------------------------------------------------------------------------------
 
@@ -1688,6 +1912,10 @@ for the program being run. Note that these are not additions to the default
 environment variables; they define the complete set available to the program. 
 If none are specified the values are guest dependent. 
 
+=item interactive =E<gt> $boolean
+
+This is set to true if the client wants an interactive session in the guest.
+
 =back
 
 =cut
@@ -1702,6 +1930,7 @@ sub run_in_vm {
         args => '',
         dir  => undef,
         env  => [],
+        interactive => 0,
         @_,
     );
 
@@ -1715,7 +1944,9 @@ sub run_in_vm {
     my $w = XML::Writer->new(OUTPUT => \my $spec, UNSAFE => 1);
     $w->dataElement(vm => $self->get_moid($vm_name), type => 'VirtualMachine');
     $w->startTag('auth', 'xsi:type' => 'NamePasswordAuthentication');
-    $w->dataElement(interactiveSession => 'false');
+    $w->dataElement(
+        interactiveSession => $args{interactive} ? 'true' : 'false'
+    );
     $w->dataElement(username => $username);
     $w->dataElement(password => $password);
     $w->endTag('auth');
